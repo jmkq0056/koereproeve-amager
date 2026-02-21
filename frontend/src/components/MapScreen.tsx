@@ -12,6 +12,79 @@ interface Props {
   onSave: () => void;
 }
 
+// --- SVG Icons (16x16 unless noted) ---
+const IconBack = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+);
+
+const IconSave = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+  </svg>
+);
+
+const IconSaveFilled = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+  </svg>
+);
+
+const IconFilter = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
+  </svg>
+);
+
+const IconHouse = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+  </svg>
+);
+
+const IconEye = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+
+const IconLayers = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+  </svg>
+);
+
+const IconX = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const IconChevronLeft = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+);
+
+const IconChevronRight = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
+  </svg>
+);
+
+const IconPlay = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="5 3 19 12 5 21 5 3"/>
+  </svg>
+);
+
+const IconList = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+  </svg>
+);
+
 const TYPE_COLORS: Record<string, string> = {
   hojre_vigepligt: "#ef4444",
   ubetinget_vigepligt: "#3b82f6",
@@ -27,31 +100,31 @@ const TYPE_LETTERS: Record<string, string> = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  hojre_vigepligt: "Højre vigepligt",
+  hojre_vigepligt: "Hoejre vigepligt",
   ubetinget_vigepligt: "Ubetinget vigepligt",
   trafiklys: "Trafiklys",
   stopskilt: "Stopskilt",
 };
 
 const MANEUVER_ARROWS: Record<string, string> = {
-  TURN_LEFT: "↰",
-  TURN_RIGHT: "↱",
-  TURN_SLIGHT_LEFT: "↖",
-  TURN_SLIGHT_RIGHT: "↗",
-  TURN_SHARP_LEFT: "⮢",
-  TURN_SHARP_RIGHT: "⮣",
-  UTURN_LEFT: "⮌",
-  UTURN_RIGHT: "⮎",
-  STRAIGHT: "↑",
-  DEPART: "●",
-  ROUNDABOUT_LEFT: "↺",
-  ROUNDABOUT_RIGHT: "↻",
-  RAMP_LEFT: "↰",
-  RAMP_RIGHT: "↱",
-  MERGE: "⤚",
-  FORK_LEFT: "↰",
-  FORK_RIGHT: "↱",
-  NAME_CHANGE: "↑",
+  TURN_LEFT: "\u21B0",
+  TURN_RIGHT: "\u21B1",
+  TURN_SLIGHT_LEFT: "\u2196",
+  TURN_SLIGHT_RIGHT: "\u2197",
+  TURN_SHARP_LEFT: "\u2BA2",
+  TURN_SHARP_RIGHT: "\u2BA3",
+  UTURN_LEFT: "\u2B8C",
+  UTURN_RIGHT: "\u2B8E",
+  STRAIGHT: "\u2191",
+  DEPART: "\u25CF",
+  ROUNDABOUT_LEFT: "\u21BA",
+  ROUNDABOUT_RIGHT: "\u21BB",
+  RAMP_LEFT: "\u21B0",
+  RAMP_RIGHT: "\u21B1",
+  MERGE: "\u2A5A",
+  FORK_LEFT: "\u21B0",
+  FORK_RIGHT: "\u21B1",
+  NAME_CHANGE: "\u2191",
 };
 
 // Road types that are NOT residential driving test roads — skip for speed lookup
@@ -202,7 +275,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
       });
       startMarkerRef.current.addListener("click", () => {
         infoWindowRef.current?.setContent(
-          `<div style="font:13px system-ui;padding:4px"><strong>Start / Slut</strong><br/>Vindblæs Alle 2, 2770 Kastrup</div>`
+          `<div style="font:13px system-ui;padding:4px"><strong>Start / Slut</strong><br/>Vindblaes Alle 2, 2770 Kastrup</div>`
         );
         infoWindowRef.current?.open(map, startMarkerRef.current!);
       });
@@ -256,7 +329,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
     }
   }, [mode, currentStep, steps]);
 
-  // Intersection markers — show ALL, no filtering by proximity
+  // Intersection markers
   useEffect(() => {
     if (!mapInstance.current) return;
     markersRef.current.forEach((m) => (m.map = null));
@@ -308,7 +381,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
         map: mapInstance.current!,
         position: { lat: midPt.lat, lng: midPt.lng },
         content: sign,
-        title: `${road.name} — ${road.maxspeed} km/t`,
+        title: `${road.name} -- ${road.maxspeed} km/t`,
       });
       marker.addListener("click", () => {
         infoWindowRef.current?.setContent(
@@ -360,7 +433,6 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
           sv.setPov({ heading: 0, pitch: 0 });
           sv.setVisible(true);
         } else {
-          // Fallback: start point
           svService.getPanorama(
             {
               location: { lat: START_LAT, lng: START_LNG },
@@ -374,8 +446,6 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
                 sv.setPosition(data2.location.latLng);
                 sv.setPov({ heading: 0, pitch: 0 });
                 sv.setVisible(true);
-              } else {
-                alert("Ingen gadevisning tilgængelig her");
               }
             }
           );
@@ -402,7 +472,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   }, []);
 
-  // Nearby intersections for current step — deduplicated by type, show count
+  // Nearby intersections for current step — deduplicated by type
   const getStepWarnings = useCallback((): { type: string; count: number }[] => {
     if (mode !== "step" || !steps[currentStep]) return [];
     const step = steps[currentStep];
@@ -410,7 +480,6 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
       (i) => nearPoint(i.lat, i.lng, step.startLat, step.startLng, 40) ||
              nearPoint(i.lat, i.lng, step.endLat, step.endLng, 40)
     );
-    // Deduplicate: group by type, show count
     const counts: Record<string, number> = {};
     for (const n of nearby) {
       counts[n.type] = (counts[n.type] || 0) + 1;
@@ -441,7 +510,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
   }, [mode, currentStep, steps, roads]);
 
   const FILTER_ITEMS: { key: keyof MarkerFilter; label: string; color: string }[] = [
-    { key: "hojre_vigepligt", label: "Højre vigepligt", color: "#ef4444" },
+    { key: "hojre_vigepligt", label: "Hoejre vigepligt", color: "#ef4444" },
     { key: "ubetinget_vigepligt", label: "Ubetinget vigepligt", color: "#3b82f6" },
     { key: "trafiklys", label: "Trafiklys", color: "#22c55e" },
     { key: "stopskilt", label: "Stopskilt", color: "#eab308" },
@@ -453,21 +522,20 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
   const villaArea = getVillaForStep();
   const speedLimit = getSpeedForStep();
 
-  // SINGLE DOM structure — never change tree shape. Hide/show with CSS to keep map alive.
   return (
     <div className="h-full relative flex flex-col">
-      {/* Top bar — hidden during street view */}
-      <div className={`bg-white border-b border-slate-200 pt-[env(safe-area-inset-top)] ${streetViewActive ? "hidden" : ""}`}>
+      {/* Top bar */}
+      <div className={`bg-white/95 backdrop-blur-sm border-b border-slate-200 pt-[max(env(safe-area-inset-top),8px)] ${streetViewActive ? "hidden" : ""}`}>
         <div className="flex items-center gap-2 px-3 py-2">
-          <button onClick={onBack} className="text-blue-500 font-semibold text-sm shrink-0">
-            ← Hjem
+          <button onClick={onBack} className="text-blue-500 p-1.5 -ml-1 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors shrink-0">
+            <IconBack />
           </button>
           <div className="flex-1 min-w-0 text-center">
             <span className="font-bold text-sm">{route.duration_minutes} min</span>
-            <span className="text-slate-400 text-xs mx-1">·</span>
+            <span className="text-slate-300 text-xs mx-1.5">|</span>
             <span className="text-sm text-slate-600">{(route.distance_meters / 1000).toFixed(1)} km</span>
             <span
-              className={`text-xs ml-1 px-1.5 py-0.5 rounded-full ${
+              className={`text-xs ml-2 px-2 py-0.5 rounded-full font-medium ${
                 route.duration_minutes >= 25 && route.duration_minutes <= 40
                   ? "bg-green-100 text-green-700"
                   : "bg-red-100 text-red-700"
@@ -478,61 +546,68 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
           </div>
           <button
             onClick={() => { onSave(); setSaved(true); setTimeout(() => setSaved(false), 2000); }}
-            className={`text-sm font-semibold shrink-0 px-3 py-1 rounded-lg ${saved ? "bg-green-500 text-white" : "text-blue-500"}`}
+            className={`p-1.5 rounded-lg transition-colors shrink-0 ${saved ? "text-green-500" : "text-blue-500 hover:bg-blue-50 active:bg-blue-100"}`}
           >
-            {saved ? "Gemt!" : "Gem"}
+            {saved ? <IconSaveFilled /> : <IconSave />}
           </button>
         </div>
 
         {mode === "step" && steps.length > 0 && (
           <div className="px-3 pb-2">
             <div className="flex items-center gap-2">
-              <button onClick={exitStepMode} className="text-xs text-blue-500 font-semibold shrink-0">Oversigt</button>
-              <div className="flex-1 bg-slate-100 rounded-full h-1.5">
-                <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }} />
+              <button onClick={exitStepMode} className="text-xs text-blue-500 font-semibold shrink-0 flex items-center gap-0.5">
+                <IconList />
+                Oversigt
+              </button>
+              <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }} />
               </div>
-              <span className="text-xs text-slate-500 shrink-0">Trin {currentStep + 1} af {steps.length}</span>
+              <span className="text-xs text-slate-400 shrink-0 tabular-nums">{currentStep + 1}/{steps.length}</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Map — ALWAYS rendered, never removed from DOM */}
+      {/* Map */}
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
 
-        {/* Street view exit button — overlaid on top of map */}
+        {/* Street view exit */}
         {streetViewActive && (
-          <div className="absolute top-0 left-0 right-0 z-20 pt-[env(safe-area-inset-top)] px-4 pb-2 bg-black/70">
+          <div className="absolute top-0 left-0 right-0 z-20 pt-[max(env(safe-area-inset-top),8px)] px-4 pb-2 bg-black/60 backdrop-blur-sm">
             <button
               onClick={exitStreetView}
-              className="mt-2 bg-white text-black px-4 py-2.5 rounded-xl text-sm font-bold shadow-lg w-full"
+              className="mt-2 bg-white text-slate-800 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg w-full flex items-center justify-center gap-2 active:bg-slate-100"
             >
-              ← Tilbage til kort
+              <IconBack />
+              Tilbage til kort
             </button>
           </div>
         )}
 
-        {/* Overview: Start gennemgang button */}
+        {/* Overview: Start button */}
         {!streetViewActive && mode === "overview" && steps.length > 0 && (
           <button
             onClick={enterStepMode}
-            className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg"
+            className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-semibold shadow-lg flex items-center gap-2 transition-colors"
           >
+            <IconPlay />
             Start gennemgang
           </button>
         )}
 
-        {/* Panels */}
+        {/* Filter panel */}
         {!streetViewActive && panel === "filters" && (
-          <div className="absolute bottom-2 left-3 right-3 z-10 bg-white rounded-xl shadow-lg p-3">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold uppercase text-slate-500">Vis på kort</span>
-              <button onClick={() => setPanel("none")} className="text-slate-400 font-bold">✕</button>
+          <div className="absolute bottom-2 left-3 right-3 z-10 bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-4 border border-slate-200">
+            <div className="flex justify-between items-center mb-3">
+              <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">Vis paa kort</span>
+              <button onClick={() => setPanel("none")} className="text-slate-400 hover:text-slate-600 p-1 transition-colors">
+                <IconX />
+              </button>
             </div>
             {FILTER_ITEMS.map((item) => (
-              <label key={item.key} className="flex items-center gap-2 py-1.5 cursor-pointer">
-                <input type="checkbox" checked={filters[item.key]} onChange={(e) => setFilters({ ...filters, [item.key]: e.target.checked })} className="w-4 h-4" />
+              <label key={item.key} className="flex items-center gap-3 py-2 cursor-pointer">
+                <input type="checkbox" checked={filters[item.key]} onChange={(e) => setFilters({ ...filters, [item.key]: e.target.checked })} className="w-4 h-4 rounded" />
                 <span className="w-3 h-3 rounded-full shrink-0" style={{ background: item.color }} />
                 <span className="text-sm text-slate-700">{item.label}</span>
               </label>
@@ -540,17 +615,20 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
           </div>
         )}
 
+        {/* Villa panel */}
         {!streetViewActive && panel === "villas" && (
-          <div className="absolute bottom-2 left-3 right-3 z-10 bg-white rounded-xl shadow-lg p-3 max-h-[50vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-2 sticky top-0 bg-white pb-1">
-              <span className="text-xs font-bold uppercase text-slate-500">Villa kvarterer ({villaStreets.length})</span>
-              <button onClick={() => setPanel("none")} className="text-slate-400 font-bold">✕</button>
+          <div className="absolute bottom-2 left-3 right-3 z-10 bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-4 max-h-[50vh] overflow-y-auto border border-slate-200">
+            <div className="flex justify-between items-center mb-3 sticky top-0 bg-white/95 backdrop-blur-sm pb-2">
+              <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">Villakvarterer ({villaStreets.length})</span>
+              <button onClick={() => setPanel("none")} className="text-slate-400 hover:text-slate-600 p-1 transition-colors">
+                <IconX />
+              </button>
             </div>
             {villaStreets.map((s) => (
               <button
                 key={s.id || s.name}
                 onClick={() => { mapInstance.current?.panTo({ lat: s.lat, lng: s.lng }); mapInstance.current?.setZoom(17); setPanel("none"); }}
-                className="w-full flex items-center justify-between py-2 border-b border-slate-100 text-sm hover:text-blue-500 text-left"
+                className="w-full flex items-center justify-between py-2.5 border-b border-slate-100 text-sm hover:text-blue-500 text-left transition-colors"
               >
                 <span>{s.name}</span>
                 <span className="text-slate-400 text-xs shrink-0 ml-2">{s.distance_m ? `${(s.distance_m / 1000).toFixed(1)} km` : ""}</span>
@@ -561,38 +639,38 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
 
         {/* Reset view */}
         {!streetViewActive && outOfBounds && mode === "overview" && (
-          <button onClick={resetView} className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-blue-500 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg">
+          <button onClick={resetView} className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-white text-blue-500 px-4 py-2 rounded-full text-xs font-semibold shadow-lg border border-slate-200 active:bg-slate-50">
             Tilbage til rute
           </button>
         )}
       </div>
 
-      {/* Step mode: bottom card — hidden during street view */}
+      {/* Step bottom card */}
       {!streetViewActive && mode === "step" && stepData && (
-        <div className="bg-white border-t border-slate-200 pb-[env(safe-area-inset-bottom)]">
+        <div className="bg-white border-t border-slate-200 pb-[max(env(safe-area-inset-bottom),8px)]">
           <div className="px-4 py-3">
             <div className="flex items-start gap-3 mb-3">
-              <span className="text-3xl shrink-0 mt-0.5">{MANEUVER_ARROWS[stepData.maneuver] || "↑"}</span>
+              <span className="text-2xl shrink-0 mt-0.5 w-8 text-center font-mono">{MANEUVER_ARROWS[stepData.maneuver] || "\u2191"}</span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 leading-snug">{stepData.instruction || "Fortsæt ligeud"}</p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {stepData.distance_text}{stepData.duration_text ? ` — ${stepData.duration_text}` : ""}
+                <p className="text-sm font-semibold text-slate-800 leading-snug">{stepData.instruction || "Fortsaet ligeud"}</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {stepData.distance_text}{stepData.duration_text ? ` -- ${stepData.duration_text}` : ""}
                 </p>
               </div>
               {speedLimit && (
-                <div className="shrink-0 w-10 h-10 rounded-full bg-white border-[3px] border-red-600 flex items-center justify-center shadow">
+                <div className="shrink-0 w-10 h-10 rounded-full bg-white border-[3px] border-red-600 flex items-center justify-center shadow-sm">
                   <span className="text-sm font-bold text-black">{speedLimit}</span>
                 </div>
               )}
             </div>
 
-            {/* Nearby warnings — deduplicated by type */}
+            {/* Warnings */}
             {stepWarnings.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {stepWarnings.map((w) => (
                   <span
                     key={w.type}
-                    className="text-xs px-2 py-0.5 rounded-full text-white font-medium"
+                    className="text-xs px-2.5 py-1 rounded-full text-white font-medium"
                     style={{ background: TYPE_COLORS[w.type] || "#9ca3af" }}
                   >
                     {TYPE_LETTERS[w.type]} {TYPE_LABELS[w.type]}{w.count > 1 ? ` x${w.count}` : ""}
@@ -602,41 +680,47 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
             )}
 
             {villaArea && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2">
-                <span className="text-xs font-semibold text-amber-700">Villa kvarter — parkering, 3-punkt vending</span>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+                <span className="text-xs font-semibold text-amber-700">Villakvarter -- parkering, 3-punkt vending</span>
               </div>
             )}
 
             <div className="flex gap-2">
-              <button onClick={goPrevStep} disabled={currentStep === 0} className="flex-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-700 py-3 rounded-xl font-semibold text-sm transition-colors">
-                ← Forrige
+              <button onClick={goPrevStep} disabled={currentStep === 0} className="flex-1 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 disabled:opacity-30 text-slate-700 py-3 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-1">
+                <IconChevronLeft />
+                Forrige
               </button>
-              <button onClick={openStreetViewAtStep} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold transition-colors" title="Gadevisning">
-                👁
+              <button onClick={openStreetViewAtStep} className="bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 px-4 py-3 rounded-xl transition-colors flex items-center justify-center" title="Gadevisning">
+                <IconEye />
               </button>
-              <button onClick={goNextStep} disabled={currentStep === steps.length - 1} className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:opacity-30 text-white py-3 rounded-xl font-semibold text-sm transition-colors">
-                Næste →
+              <button onClick={goNextStep} disabled={currentStep === steps.length - 1} className="flex-1 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 disabled:opacity-30 text-white py-3 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-1">
+                Naeste
+                <IconChevronRight />
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Bottom bar — overview only, hidden during street view */}
+      {/* Bottom bar — overview */}
       {!streetViewActive && mode === "overview" && (
-        <div className="bg-white border-t border-slate-200 pb-[env(safe-area-inset-bottom)]">
-          <div className="flex items-center justify-around px-2 py-2">
-            <button onClick={() => setPanel(panel === "filters" ? "none" : "filters")} className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs ${panel === "filters" ? "text-blue-500 bg-blue-50" : "text-slate-600"}`}>
-              <span className="text-lg">⚙</span><span>Filter</span>
+        <div className="bg-white/95 backdrop-blur-sm border-t border-slate-200 pb-[max(env(safe-area-inset-bottom),8px)]">
+          <div className="flex items-center justify-around px-2 py-1.5">
+            <button onClick={() => setPanel(panel === "filters" ? "none" : "filters")} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs transition-colors ${panel === "filters" ? "text-blue-500 bg-blue-50" : "text-slate-500"}`}>
+              <IconFilter />
+              <span>Filter</span>
             </button>
-            <button onClick={() => setPanel(panel === "villas" ? "none" : "villas")} className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs ${panel === "villas" ? "text-blue-500 bg-blue-50" : "text-slate-600"}`}>
-              <span className="text-lg">🏘</span><span>Villa</span>
+            <button onClick={() => setPanel(panel === "villas" ? "none" : "villas")} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs transition-colors ${panel === "villas" ? "text-blue-500 bg-blue-50" : "text-slate-500"}`}>
+              <IconHouse />
+              <span>Villa</span>
             </button>
-            <button onClick={openStreetViewAtStep} className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs text-slate-600">
-              <span className="text-lg">👁</span><span>Gadevisning</span>
+            <button onClick={openStreetViewAtStep} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-slate-500 transition-colors">
+              <IconEye />
+              <span>Gadevisning</span>
             </button>
-            <button onClick={() => setMapType(mapType === "roadmap" ? "hybrid" : "roadmap")} className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs text-slate-600">
-              <span className="text-lg">{mapType === "roadmap" ? "🛰" : "🗺"}</span><span>{mapType === "roadmap" ? "Satellit" : "Kort"}</span>
+            <button onClick={() => setMapType(mapType === "roadmap" ? "hybrid" : "roadmap")} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-slate-500 transition-colors">
+              <IconLayers />
+              <span>{mapType === "roadmap" ? "Satellit" : "Kort"}</span>
             </button>
           </div>
         </div>
