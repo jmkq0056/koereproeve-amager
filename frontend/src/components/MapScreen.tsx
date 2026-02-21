@@ -1,12 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from "react";
-import type { Intersection, Road, VillaStreet, Neighborhood, RouteData, MarkerFilter } from "../types";
+import type { Intersection, Road, VillaStreet, RouteData, MarkerFilter } from "../types";
 
 interface Props {
   route: RouteData;
   intersections: Intersection[];
   roads: Road[];
   villaStreets: VillaStreet[];
-  neighborhoods: Neighborhood[];
   filters: MarkerFilter;
   setFilters: (f: MarkerFilter) => void;
   onBack: () => void;
@@ -32,7 +31,6 @@ export default function MapScreen({
   intersections,
   roads,
   villaStreets,
-  neighborhoods,
   filters,
   setFilters,
   onBack,
@@ -47,16 +45,14 @@ export default function MapScreen({
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
 
   const [mapType, setMapType] = useState<"roadmap" | "hybrid">("roadmap");
-  const [showFilters, setShowFilters] = useState(false);
-  const [showVillas, setShowVillas] = useState(false);
+  const [panel, setPanel] = useState<"none" | "filters" | "villas">("none");
   const [outOfBounds, setOutOfBounds] = useState(false);
   const [saved, setSaved] = useState(false);
   const [streetViewActive, setStreetViewActive] = useState(false);
 
-  // Initialize map and draw route
+  // Init map
   useEffect(() => {
     if (!mapRef.current) return;
-
     const init = async () => {
       const { Map } = await google.maps.importLibrary("maps") as google.maps.MapsLibrary;
       await google.maps.importLibrary("marker");
@@ -66,49 +62,40 @@ export default function MapScreen({
         zoom: 14,
         mapId: "koereproeve-map",
         mapTypeId: mapType,
-        streetViewControl: true,
+        streetViewControl: false,
         fullscreenControl: false,
         mapTypeControl: false,
+        zoomControl: false,
       });
-
       mapInstance.current = map;
       infoWindowRef.current = new google.maps.InfoWindow();
 
       // Draw route
       const path = google.maps.geometry.encoding.decodePath(route.polyline);
-      const routeLine = new google.maps.Polyline({
+      routeLineRef.current = new google.maps.Polyline({
         path,
         strokeColor: "#2563eb",
         strokeOpacity: 0.9,
         strokeWeight: 6,
         map,
       });
-      routeLineRef.current = routeLine;
 
-      // Fit to route bounds
       const bounds = new google.maps.LatLngBounds();
       path.forEach((p) => bounds.extend(p));
       boundsRef.current = bounds;
       map.fitBounds(bounds, 60);
 
-      // Detect out of bounds
       map.addListener("idle", () => {
         if (!boundsRef.current) return;
-        const currentBounds = map.getBounds();
-        if (!currentBounds) return;
-        const routeCenter = boundsRef.current.getCenter();
-        setOutOfBounds(!currentBounds.contains(routeCenter));
+        const cb = map.getBounds();
+        if (!cb) return;
+        setOutOfBounds(!cb.contains(boundsRef.current.getCenter()));
       });
 
-      // Detect street view
       const sv = map.getStreetView();
-      sv.addListener("visible_changed", () => {
-        setStreetViewActive(sv.getVisible());
-      });
+      sv.addListener("visible_changed", () => setStreetViewActive(sv.getVisible()));
     };
-
     init();
-
     return () => {
       markersRef.current.forEach((m) => (m.map = null));
       polylinesRef.current.forEach((p) => p.setMap(null));
@@ -116,26 +103,22 @@ export default function MapScreen({
     };
   }, []);
 
-  // Update map type
-  useEffect(() => {
-    mapInstance.current?.setMapTypeId(mapType);
-  }, [mapType]);
+  useEffect(() => { mapInstance.current?.setMapTypeId(mapType); }, [mapType]);
 
-  // Draw intersection markers
+  // Markers
   useEffect(() => {
     if (!mapInstance.current) return;
     markersRef.current.forEach((m) => (m.map = null));
     markersRef.current = [];
 
     intersections.forEach((inter) => {
-      const filterKey = inter.type as keyof MarkerFilter;
-      if (filterKey in filters && !filters[filterKey]) return;
-
+      const fk = inter.type as keyof MarkerFilter;
+      if (fk in filters && !filters[fk]) return;
       const color = TYPE_COLORS[inter.type] || "#9ca3af";
       const label = TYPE_LABELS[inter.type] || inter.type;
 
       const pin = document.createElement("div");
-      pin.style.cssText = `width:12px;height:12px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);`;
+      pin.style.cssText = `width:10px;height:10px;border-radius:50%;background:${color};border:1.5px solid white;box-shadow:0 1px 2px rgba(0,0,0,0.3);`;
 
       const marker = new google.maps.marker.AdvancedMarkerElement({
         map: mapInstance.current!,
@@ -143,26 +126,21 @@ export default function MapScreen({
         content: pin,
         title: label,
       });
-
       marker.addListener("click", () => {
         infoWindowRef.current?.setContent(
-          `<div style="font-family:system-ui;font-size:13px;padding:4px">
-            <strong style="color:${color}">${label}</strong>
-          </div>`
+          `<div style="font:13px system-ui;padding:2px"><strong style="color:${color}">${label}</strong></div>`
         );
         infoWindowRef.current?.open(mapInstance.current!, marker);
       });
-
       markersRef.current.push(marker);
     });
   }, [intersections, filters]);
 
-  // Draw speed limit overlays
+  // Speed overlays
   useEffect(() => {
     if (!mapInstance.current) return;
     polylinesRef.current.forEach((p) => p.setMap(null));
     polylinesRef.current = [];
-
     if (!filters.speed_limits) return;
 
     roads.forEach((road) => {
@@ -175,43 +153,42 @@ export default function MapScreen({
       else if (speed <= 80) color = "#f97316";
       else color = "#ef4444";
 
-      const polyline = new google.maps.Polyline({
+      const pl = new google.maps.Polyline({
         path: road.geometry,
         strokeColor: color,
-        strokeOpacity: 0.7,
+        strokeOpacity: 0.6,
         strokeWeight: 3,
         map: mapInstance.current!,
       });
-
-      polyline.addListener("click", (e: google.maps.MapMouseEvent) => {
+      pl.addListener("click", (e: google.maps.MapMouseEvent) => {
         infoWindowRef.current?.setContent(
-          `<div style="font-family:system-ui;font-size:13px;padding:4px">
-            <strong>${road.name}</strong><br/>
-            <span style="color:${color};font-size:16px;font-weight:bold">${road.maxspeed} km/t</span>
-          </div>`
+          `<div style="font:13px system-ui;padding:2px"><strong>${road.name}</strong><br/><span style="color:${color};font-size:15px;font-weight:bold">${road.maxspeed} km/t</span></div>`
         );
         infoWindowRef.current?.setPosition(e.latLng);
         infoWindowRef.current?.open(mapInstance.current!);
       });
-
-      polylinesRef.current.push(polyline);
+      polylinesRef.current.push(pl);
     });
   }, [roads, filters.speed_limits]);
 
   const resetView = useCallback(() => {
-    if (mapInstance.current && boundsRef.current) {
+    if (mapInstance.current && boundsRef.current)
       mapInstance.current.fitBounds(boundsRef.current, 60);
-    }
   }, []);
 
   const exitStreetView = useCallback(() => {
-    const sv = mapInstance.current?.getStreetView();
-    if (sv) sv.setVisible(false);
+    mapInstance.current?.getStreetView().setVisible(false);
   }, []);
 
-  const openVillaInMaps = (lat: number, lng: number) => {
-    window.open(`https://www.google.com/maps/@${lat},${lng},17z`, "_blank");
-  };
+  const enterStreetView = useCallback(() => {
+    const map = mapInstance.current;
+    if (!map) return;
+    const center = map.getCenter();
+    if (!center) return;
+    const sv = map.getStreetView();
+    sv.setPosition(center);
+    sv.setVisible(true);
+  }, []);
 
   const FILTER_ITEMS: { key: keyof MarkerFilter; label: string; color: string }[] = [
     { key: "hojre_vigepligt", label: "Højre vigepligt", color: "#ef4444" },
@@ -221,159 +198,148 @@ export default function MapScreen({
     { key: "speed_limits", label: "Hastighed", color: "#a855f7" },
   ];
 
-  return (
-    <div className="h-full relative">
-      {/* Map */}
-      <div ref={mapRef} className="w-full h-full" />
-
-      {/* Street View back button */}
-      {streetViewActive && (
-        <button
-          onClick={exitStreetView}
-          className="absolute top-4 left-4 z-20 bg-black/80 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-lg"
-        >
-          ← Tilbage til kort
-        </button>
-      )}
-
-      {/* Top bar - only show when NOT in street view */}
-      {!streetViewActive && (
-        <div className="absolute top-4 left-4 right-4 z-10 flex items-center gap-2">
-          {/* Back button */}
+  // Street view mode
+  if (streetViewActive) {
+    return (
+      <div className="h-full relative">
+        <div ref={mapRef} className="w-full h-full" />
+        <div className="absolute top-0 left-0 right-0 z-20 pt-[env(safe-area-inset-top)] px-4 pb-2 bg-black/70">
           <button
-            onClick={onBack}
-            className="bg-white shadow-lg rounded-xl px-3 py-2.5 text-sm font-semibold shrink-0"
+            onClick={exitStreetView}
+            className="mt-2 bg-white text-black px-4 py-2.5 rounded-xl text-sm font-bold shadow-lg w-full"
           >
+            ← Tilbage til kort
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full relative flex flex-col">
+      {/* Top bar */}
+      <div className="bg-white border-b border-slate-200 pt-[env(safe-area-inset-top)]">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <button onClick={onBack} className="text-blue-500 font-semibold text-sm shrink-0">
             ← Hjem
           </button>
-
-          {/* Route info */}
-          <div className="bg-white shadow-lg rounded-xl px-3 py-2 flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm">{route.duration_minutes} min</span>
-              <span className="text-slate-400 text-xs">·</span>
-              <span className="text-sm text-slate-600">
-                {(route.distance_meters / 1000).toFixed(1)} km
-              </span>
-              <span
-                className={`text-xs px-1.5 py-0.5 rounded-full ${
-                  route.duration_minutes >= 25 && route.duration_minutes <= 40
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
-                }`}
-              >
-                {route.duration_minutes >= 25 && route.duration_minutes <= 40 ? "OK" : "Uden for tid"}
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 truncate">
-              {route.include_motorway ? "Med motorvej (E20)" : "Uden motorvej"}
-            </p>
+          <div className="flex-1 min-w-0 text-center">
+            <span className="font-bold text-sm">{route.duration_minutes} min</span>
+            <span className="text-slate-400 text-xs mx-1">·</span>
+            <span className="text-sm text-slate-600">{(route.distance_meters / 1000).toFixed(1)} km</span>
+            <span className={`text-xs ml-1 px-1.5 py-0.5 rounded-full ${
+              route.duration_minutes >= 25 && route.duration_minutes <= 40
+                ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+            }`}>
+              {route.duration_minutes >= 25 && route.duration_minutes <= 40 ? "OK" : "Uden for tid"}
+            </span>
           </div>
-
-          {/* Save */}
           <button
             onClick={() => { onSave(); setSaved(true); setTimeout(() => setSaved(false), 2000); }}
-            className={`shadow-lg rounded-xl px-3 py-2.5 text-sm font-semibold shrink-0 ${
-              saved ? "bg-green-500 text-white" : "bg-white"
+            className={`text-sm font-semibold shrink-0 px-3 py-1 rounded-lg ${
+              saved ? "bg-green-500 text-white" : "text-blue-500"
             }`}
           >
             {saved ? "Gemt!" : "Gem"}
           </button>
         </div>
-      )}
+      </div>
 
-      {/* Bottom controls - only show when NOT in street view */}
-      {!streetViewActive && (
-        <div className="absolute bottom-6 left-4 right-4 z-10 flex items-end justify-between">
-          {/* Left: filter + villa buttons */}
-          <div className="flex flex-col gap-2">
-            {/* Villa panel */}
-            {showVillas && (
-              <div className="bg-white shadow-lg rounded-xl p-3 w-64 max-h-48 overflow-y-auto mb-1">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold uppercase text-slate-500">Villa kvarterer</h3>
-                  <button onClick={() => setShowVillas(false)} className="text-slate-400 text-sm">✕</button>
-                </div>
-                {neighborhoods.map((n, i) => (
-                  <button
-                    key={i}
-                    onClick={() => openVillaInMaps(n.lat, n.lng)}
-                    className="w-full text-left text-xs py-1.5 border-b border-slate-100 hover:text-blue-500 flex justify-between"
-                  >
-                    <span>{n.name}</span>
-                    <span className="text-blue-400">↗</span>
-                  </button>
-                ))}
-                {villaStreets.slice(0, 30).map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => openVillaInMaps(s.lat, s.lng)}
-                    className="w-full text-left text-xs py-1.5 border-b border-slate-100 hover:text-blue-500 flex justify-between"
-                  >
-                    <span>{s.name}</span>
-                    <span className="text-blue-400">↗</span>
-                  </button>
-                ))}
-              </div>
-            )}
+      {/* Map */}
+      <div className="flex-1 relative">
+        <div ref={mapRef} className="w-full h-full" />
 
-            {/* Filter panel */}
-            {showFilters && (
-              <div className="bg-white shadow-lg rounded-xl p-3 w-56 mb-1">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold uppercase text-slate-500">Vis på kort</h3>
-                  <button onClick={() => setShowFilters(false)} className="text-slate-400 text-sm">✕</button>
-                </div>
-                {FILTER_ITEMS.map((item) => (
-                  <label key={item.key} className="flex items-center gap-2 py-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={filters[item.key]}
-                      onChange={(e) => setFilters({ ...filters, [item.key]: e.target.checked })}
-                      className="w-3.5 h-3.5"
-                    />
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: item.color }} />
-                    <span className="text-xs text-slate-700">{item.label}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setShowFilters(!showFilters); setShowVillas(false); }}
-                className="bg-white shadow-lg rounded-xl px-3 py-2.5 text-xs font-semibold"
-              >
-                Filter
-              </button>
-              <button
-                onClick={() => { setShowVillas(!showVillas); setShowFilters(false); }}
-                className="bg-white shadow-lg rounded-xl px-3 py-2.5 text-xs font-semibold"
-              >
-                Villa
-              </button>
+        {/* Panels - positioned above bottom bar */}
+        {panel === "filters" && (
+          <div className="absolute bottom-2 left-3 right-3 z-10 bg-white rounded-xl shadow-lg p-3">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-bold uppercase text-slate-500">Vis på kort</span>
+              <button onClick={() => setPanel("none")} className="text-slate-400 font-bold">✕</button>
             </div>
+            {FILTER_ITEMS.map((item) => (
+              <label key={item.key} className="flex items-center gap-2 py-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters[item.key]}
+                  onChange={(e) => setFilters({ ...filters, [item.key]: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ background: item.color }} />
+                <span className="text-sm text-slate-700">{item.label}</span>
+              </label>
+            ))}
           </div>
+        )}
 
-          {/* Right: map type + reset */}
-          <div className="flex flex-col gap-2 items-end">
-            {outOfBounds && (
-              <button
-                onClick={resetView}
-                className="bg-blue-500 text-white shadow-lg rounded-xl px-3 py-2.5 text-xs font-semibold animate-pulse"
+        {panel === "villas" && (
+          <div className="absolute bottom-2 left-3 right-3 z-10 bg-white rounded-xl shadow-lg p-3 max-h-[50vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-2 sticky top-0 bg-white pb-1">
+              <span className="text-xs font-bold uppercase text-slate-500">Villa kvarterer ({villaStreets.length})</span>
+              <button onClick={() => setPanel("none")} className="text-slate-400 font-bold">✕</button>
+            </div>
+            {villaStreets.map((s) => (
+              <a
+                key={s.id}
+                href={`https://www.google.com/maps/@${s.lat},${s.lng},17z`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between py-2 border-b border-slate-100 text-sm hover:text-blue-500"
               >
-                Tilbage til rute
-              </button>
-            )}
-            <button
-              onClick={() => setMapType(mapType === "roadmap" ? "hybrid" : "roadmap")}
-              className="bg-white shadow-lg rounded-xl px-3 py-2.5 text-xs font-semibold"
-            >
-              {mapType === "roadmap" ? "Satellit" : "Kort"}
-            </button>
+                <span>{s.name}</span>
+                <span className="text-blue-400 text-xs shrink-0">Kort ↗</span>
+              </a>
+            ))}
           </div>
+        )}
+
+        {/* Reset view button */}
+        {outOfBounds && (
+          <button
+            onClick={resetView}
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-blue-500 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg"
+          >
+            Tilbage til rute
+          </button>
+        )}
+      </div>
+
+      {/* Bottom bar */}
+      <div className="bg-white border-t border-slate-200 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center justify-around px-2 py-2">
+          <button
+            onClick={() => setPanel(panel === "filters" ? "none" : "filters")}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs ${
+              panel === "filters" ? "text-blue-500 bg-blue-50" : "text-slate-600"
+            }`}
+          >
+            <span className="text-lg">⚙</span>
+            <span>Filter</span>
+          </button>
+          <button
+            onClick={() => setPanel(panel === "villas" ? "none" : "villas")}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs ${
+              panel === "villas" ? "text-blue-500 bg-blue-50" : "text-slate-600"
+            }`}
+          >
+            <span className="text-lg">🏘</span>
+            <span>Villa</span>
+          </button>
+          <button
+            onClick={enterStreetView}
+            className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs text-slate-600"
+          >
+            <span className="text-lg">👁</span>
+            <span>Gadevisning</span>
+          </button>
+          <button
+            onClick={() => setMapType(mapType === "roadmap" ? "hybrid" : "roadmap")}
+            className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs text-slate-600"
+          >
+            <span className="text-lg">{mapType === "roadmap" ? "🛰" : "🗺"}</span>
+            <span>{mapType === "roadmap" ? "Satellit" : "Kort"}</span>
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

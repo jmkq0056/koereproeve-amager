@@ -7,7 +7,7 @@ import {
   fetchSpeedLimits,
   fetchVillaAreas,
 } from "./api";
-import type { Intersection, Road, VillaStreet, Neighborhood, RouteData, MarkerFilter, Screen } from "./types";
+import type { Intersection, Road, VillaStreet, RouteData, MarkerFilter, Screen } from "./types";
 
 const G_API_KEY = import.meta.env.VITE_G_API_KEY;
 
@@ -19,7 +19,6 @@ function App() {
   const [intersections, setIntersections] = useState<Intersection[]>([]);
   const [roads, setRoads] = useState<Road[]>([]);
   const [villaStreets, setVillaStreets] = useState<VillaStreet[]>([]);
-  const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
   const [activeRoute, setActiveRoute] = useState<RouteData | null>(null);
   const [filters, setFilters] = useState<MarkerFilter>({
     hojre_vigepligt: true,
@@ -66,7 +65,6 @@ function App() {
       setIntersections([...vigepligt.hojre_vigepligt, ...vigepligt.signed]);
       setRoads(speed.roads);
       setVillaStreets(villa.villa_streets);
-      setNeighborhoods(villa.neighborhoods);
     }).finally(() => setDataLoading(false));
   }, [mapsLoaded]);
 
@@ -138,7 +136,6 @@ function App() {
         intersections={intersections}
         roads={roads}
         villaStreets={villaStreets}
-        neighborhoods={neighborhoods}
         filters={filters}
         setFilters={setFilters}
         onBack={handleBackToHome}
@@ -157,7 +154,6 @@ function App() {
       onLoadRoute={handleLoadRoute}
       onDeleteRoute={handleDeleteRoute}
       villaStreets={villaStreets}
-      neighborhoods={neighborhoods}
     />
   );
 }
