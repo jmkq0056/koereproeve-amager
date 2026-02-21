@@ -43,6 +43,7 @@ export interface VillaStreet {
   lng: number;
   highway_type: string;
   geometry: LatLng[];
+  distance_m?: number;
 }
 
 export interface Neighborhood {
@@ -51,6 +52,18 @@ export interface Neighborhood {
   lng: number;
   address: string;
   source: string;
+}
+
+export interface Step {
+  instruction: string;
+  maneuver: string;
+  distance_text: string;
+  duration_text: string;
+  polyline: string;
+  startLat: number;
+  startLng: number;
+  endLat: number;
+  endLng: number;
 }
 
 export type MarkerFilter = {

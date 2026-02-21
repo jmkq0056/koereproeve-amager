@@ -1,18 +1,59 @@
+import random
+import math
 from fastapi import APIRouter, Depends
 import httpx
 from config import get_settings, Settings
-from db import routes_col
+from db import routes_col, villa_col
 
 router = APIRouter()
 
-START_ADDRESS = "Amager Strandvej 390, 2770 Kastrup, Denmark"
-START_LAT = 55.6295
-START_LNG = 12.6372
+START_ADDRESS = "Vindblæs Alle 2, 2770 Kastrup, Denmark"
+START_LAT = 55.634464
+START_LNG = 12.650135
 
 TAARNBY_RUNDKOERSEL = {"lat": 55.6180, "lng": 12.6050}
 MOTORWAY_ONRAMP = {"lat": 55.6250, "lng": 12.6200}
 
 ROUTES_API_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
+
+
+def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Haversine distance in meters between two points."""
+    R = 6371000
+    dLat = math.radians(lat2 - lat1)
+    dLng = math.radians(lng2 - lng1)
+    a = (math.sin(dLat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(dLng / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+async def pick_spread_waypoints(count: int, min_dist_between: float = 300, max_dist_from_start: float = 2000) -> list[dict]:
+    """
+    Randomly select villa street centers from MongoDB,
+    ensuring they are spread apart and within max_dist_from_start of the start point.
+    """
+    all_villas = await villa_col.find({}, {"_id": 0, "lat": 1, "lng": 1, "name": 1}).to_list(10000)
+    if not all_villas:
+        return []
+
+    # Only consider villas within range of start
+    nearby = [v for v in all_villas
+              if 200 < haversine(v["lat"], v["lng"], START_LAT, START_LNG) < max_dist_from_start]
+    random.shuffle(nearby)
+    selected: list[dict] = []
+
+    for v in nearby:
+        if len(selected) >= count:
+            break
+        too_close = any(
+            haversine(v["lat"], v["lng"], s["lat"], s["lng"]) < min_dist_between
+            for s in selected
+        )
+        if not too_close:
+            selected.append({"lat": v["lat"], "lng": v["lng"]})
+
+    return selected
 
 
 @router.get("/generate")
@@ -23,22 +64,22 @@ async def generate_route(
     """
     Generate a driving test route (loop) from start address.
     With or without motorway section.
+    Routes vary each time via random villa waypoints.
     Target: 25-35 min round trip.
     """
-    waypoints = []
-
     if include_motorway:
-        waypoints = [
-            MOTORWAY_ONRAMP,
-            TAARNBY_RUNDKOERSEL,
-        ]
+        # 1 villa → motorway onramp → Tarnby rundkørsel → 1 villa → back
+        pre = await pick_spread_waypoints(1)
+        post = await pick_spread_waypoints(1)
+        waypoints = pre + [MOTORWAY_ONRAMP, TAARNBY_RUNDKOERSEL] + post
+    else:
+        # 3 random villa waypoints creating a residential loop
+        waypoints = await pick_spread_waypoints(3)
 
     intermediate = [
         {
-            "intermediateWaypoint": {
-                "location": {
-                    "latLng": {"latitude": wp["lat"], "longitude": wp["lng"]}
-                }
+            "location": {
+                "latLng": {"latitude": wp["lat"], "longitude": wp["lng"]}
             }
         }
         for wp in waypoints
@@ -55,13 +96,13 @@ async def generate_route(
                 "latLng": {"latitude": START_LAT, "longitude": START_LNG}
             }
         },
-        "intermediates": [item["intermediateWaypoint"] for item in intermediate] if intermediate else [],
+        "intermediates": intermediate,
         "travelMode": "DRIVE",
         "routingPreference": "TRAFFIC_AWARE",
         "routeModifiers": {
             "avoidHighways": not include_motorway,
         },
-        "computeAlternativeRoutes": True,
+        "computeAlternativeRoutes": False,
         "languageCode": "da",
         "units": "METRIC",
     }
@@ -69,7 +110,7 @@ async def generate_route(
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": settings.G_API_KEY,
-        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.legs.steps.navigationInstruction,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline",
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.legs.steps.navigationInstruction,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.localizedValues,routes.legs.steps.polyline,routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline",
     }
 
     async with httpx.AsyncClient(timeout=30) as client:

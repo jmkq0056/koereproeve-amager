@@ -7,4 +7,5 @@ db = client[settings.DB_NAME]
 
 # Collections
 villa_areas_col = db["villa_areas"]
+villa_col = db["villa_streets"]
 routes_col = db["routes"]

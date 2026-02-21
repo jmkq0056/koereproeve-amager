@@ -32,7 +32,7 @@ export default function HomeScreen({
         <div className="pt-6 pb-4">
           <h1 className="text-2xl font-bold">Køreprøve Amager</h1>
           <p className="text-slate-400 text-sm mt-1">
-            Amager Strandvej 390, 2770 Kastrup
+            Vindblæs Alle 2, 2770 Kastrup
           </p>
         </div>
 
@@ -85,7 +85,7 @@ export default function HomeScreen({
           )}
 
           <p className="text-xs text-slate-500 mt-2 text-center">
-            Målsætning: 25-35 min (max 40 min)
+            Målsætning: 25-35 min (max 40 min) — varierer hver gang
           </p>
         </div>
 
@@ -142,14 +142,16 @@ export default function HomeScreen({
             <div className="mt-3 max-h-80 overflow-y-auto space-y-1">
               {villaStreets.map((s) => (
                 <a
-                  key={s.id}
+                  key={s.id || s.name}
                   href={`https://www.google.com/maps/@${s.lat},${s.lng},17z`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-between bg-slate-700/50 rounded-lg px-3 py-2 hover:bg-slate-700 transition-colors"
                 >
                   <span className="text-sm">{s.name}</span>
-                  <span className="text-blue-400 text-xs shrink-0 ml-2">Kort ↗</span>
+                  <span className="text-slate-400 text-xs shrink-0 ml-2">
+                    {s.distance_m ? `${(s.distance_m / 1000).toFixed(1)} km` : "Kort ↗"}
+                  </span>
                 </a>
               ))}
               {villaStreets.length === 0 && !dataLoading && (
@@ -164,26 +166,51 @@ export default function HomeScreen({
           <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-3">
             Forklaring
           </h2>
-          <div className="grid grid-cols-2 gap-2 text-xs">
+
+          {/* Start marker */}
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-700">
+            <span className="w-6 h-6 rounded-full bg-green-600 shrink-0 flex items-center justify-center text-white text-xs font-bold border-2 border-white">
+              S
+            </span>
+            <span className="text-slate-300 text-xs">Start / Slut punkt</span>
+          </div>
+
+          {/* Intersection markers with letters */}
+          <div className="grid grid-cols-2 gap-2 text-xs mb-3">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
+              <span className="w-5 h-5 rounded-full bg-red-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border border-white">
+                H
+              </span>
               <span className="text-slate-300">Højre vigepligt</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-blue-500 shrink-0" />
+              <span className="w-5 h-5 rounded-full bg-blue-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border border-white">
+                U
+              </span>
               <span className="text-slate-300">Ubetinget vigepligt</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-green-500 shrink-0" />
+              <span className="w-5 h-5 rounded-full bg-green-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border border-white">
+                T
+              </span>
               <span className="text-slate-300">Trafiklys</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-yellow-500 shrink-0" />
+              <span className="w-5 h-5 rounded-full bg-yellow-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border border-white">
+                S
+              </span>
               <span className="text-slate-300">Stopskilt</span>
             </div>
-            <div className="flex items-center gap-2 col-span-2">
-              <span className="w-3 h-3 rounded-full bg-purple-500 shrink-0" />
-              <span className="text-slate-300">Hastighedsgrænse (farve = hastighed)</span>
+          </div>
+
+          {/* Speed limit legend */}
+          <div className="border-t border-slate-700 pt-2">
+            <span className="text-xs text-slate-400 block mb-2">Hastighedsgrænser</span>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-white border-[2.5px] border-red-600 shrink-0 flex items-center justify-center text-[9px] font-bold text-black">
+                50
+              </span>
+              <span className="text-slate-300 text-xs">Fartskilt (rød ring med tal)</span>
             </div>
           </div>
         </div>
