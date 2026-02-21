@@ -21,6 +21,9 @@
     "serve": "^14.2.5",
     "tailwindcss": "^4.2.0"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/google.maps": "^3.58.1",
