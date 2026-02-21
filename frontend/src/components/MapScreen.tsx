@@ -26,6 +26,28 @@ const TYPE_LABELS: Record<string, string> = {
   stopskilt: "Stopskilt",
 };
 
+// Haversine distance in meters between two points
+function distM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Check if a point is within `maxDist` meters of any point on the route
+function nearRoute(
+  lat: number, lng: number,
+  routePts: { lat: number; lng: number }[],
+  maxDist: number,
+): boolean {
+  for (const rp of routePts) {
+    if (distM(lat, lng, rp.lat, rp.lng) < maxDist) return true;
+  }
+  return false;
+}
+
 export default function MapScreen({
   route,
   intersections,
@@ -43,6 +65,7 @@ export default function MapScreen({
   const routeLineRef = useRef<google.maps.Polyline | null>(null);
   const boundsRef = useRef<google.maps.LatLngBounds | null>(null);
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const routePointsRef = useRef<{ lat: number; lng: number }[]>([]);
 
   const [mapType, setMapType] = useState<"roadmap" | "hybrid">("roadmap");
   const [panel, setPanel] = useState<"none" | "filters" | "villas">("none");
@@ -70,8 +93,9 @@ export default function MapScreen({
       mapInstance.current = map;
       infoWindowRef.current = new google.maps.InfoWindow();
 
-      // Draw route
+      // Draw route + sample route points for proximity filtering
       const path = google.maps.geometry.encoding.decodePath(route.polyline);
+      routePointsRef.current = path.map((p) => ({ lat: p.lat(), lng: p.lng() }));
       routeLineRef.current = new google.maps.Polyline({
         path,
         strokeColor: "#2563eb",
@@ -111,9 +135,11 @@ export default function MapScreen({
     markersRef.current.forEach((m) => (m.map = null));
     markersRef.current = [];
 
+    const rPts = routePointsRef.current;
     intersections.forEach((inter) => {
       const fk = inter.type as keyof MarkerFilter;
       if (fk in filters && !filters[fk]) return;
+      if (!nearRoute(inter.lat, inter.lng, rPts, 150)) return;
       const color = TYPE_COLORS[inter.type] || "#9ca3af";
       const label = TYPE_LABELS[inter.type] || inter.type;
 
@@ -143,8 +169,12 @@ export default function MapScreen({
     polylinesRef.current = [];
     if (!filters.speed_limits) return;
 
+    const rPts2 = routePointsRef.current;
     roads.forEach((road) => {
       if (road.geometry.length < 2) return;
+      // Only show roads where at least one point is within 150m of the route
+      const isNear = road.geometry.some((g) => nearRoute(g.lat, g.lng, rPts2, 150));
+      if (!isNear) return;
       const speed = parseInt(road.maxspeed) || 50;
       let color = "#a855f7";
       if (speed <= 30) color = "#22c55e";
@@ -278,16 +308,18 @@ export default function MapScreen({
               <button onClick={() => setPanel("none")} className="text-slate-400 font-bold">✕</button>
             </div>
             {villaStreets.map((s) => (
-              <a
+              <button
                 key={s.id}
-                href={`https://www.google.com/maps/@${s.lat},${s.lng},17z`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between py-2 border-b border-slate-100 text-sm hover:text-blue-500"
+                onClick={() => {
+                  mapInstance.current?.panTo({ lat: s.lat, lng: s.lng });
+                  mapInstance.current?.setZoom(17);
+                  setPanel("none");
+                }}
+                className="w-full flex items-center justify-between py-2 border-b border-slate-100 text-sm hover:text-blue-500 text-left"
               >
                 <span>{s.name}</span>
-                <span className="text-blue-400 text-xs shrink-0">Kort ↗</span>
-              </a>
+                <span className="text-blue-400 text-xs shrink-0">Vis</span>
+              </button>
             ))}
           </div>
         )}
