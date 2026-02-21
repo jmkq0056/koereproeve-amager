@@ -243,7 +243,7 @@ export default function HojreTrainer({ junctions, onBack }: Props) {
     return (
       <div className="h-full flex items-center justify-center bg-slate-900 text-white">
         <div className="text-center">
-          <p className="text-lg font-bold mb-2">Ingen hoejre vigepligt fundet</p>
+          <p className="text-lg font-bold mb-2">Ingen højre vigepligt fundet</p>
           <button onClick={onBack} className="text-blue-400 underline">Tilbage</button>
         </div>
       </div>
@@ -259,12 +259,12 @@ export default function HojreTrainer({ junctions, onBack }: Props) {
             <IconBack />
           </button>
           <div className="flex-1 min-w-0 text-center">
-            <span className="font-bold text-sm text-white">Hoejre Vigepligt Traening</span>
+            <span className="font-bold text-sm text-white">Højre Vigepligt Træning</span>
           </div>
           <button
             onClick={resetProgress}
             className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors shrink-0"
-            title="Nulstil fremskridt"
+            title="Nulstil"
           >
             <IconRefresh />
           </button>
@@ -318,9 +318,9 @@ export default function HojreTrainer({ junctions, onBack }: Props) {
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
               </div>
-              <h2 className="text-xl font-bold text-white mb-2">Faerdigt!</h2>
+              <h2 className="text-xl font-bold text-white mb-2">Færdigt!</h2>
               <p className="text-slate-300 text-sm mb-4">
-                Du har set alle {total} hoejre vigepligt kryds.
+                Du har set alle {total} højre vigepligt kryds.
               </p>
               <div className="flex gap-2">
                 <button
@@ -365,7 +365,7 @@ export default function HojreTrainer({ junctions, onBack }: Props) {
                 className="flex-1 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white py-3.5 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-1.5"
               >
                 <IconCheck />
-                Set / Naeste
+                Set / Næste
               </button>
             </div>
           </div>

@@ -37,12 +37,6 @@ const IconFilter = () => (
   </svg>
 );
 
-const IconHouse = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-  </svg>
-);
-
 const IconEye = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
@@ -100,7 +94,7 @@ const TYPE_LETTERS: Record<string, string> = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  hojre_vigepligt: "Hoejre vigepligt",
+  hojre_vigepligt: "Højre vigepligt",
   ubetinget_vigepligt: "Ubetinget vigepligt",
   trafiklys: "Trafiklys",
   stopskilt: "Stopskilt",
@@ -214,6 +208,8 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
   const [mode, setMode] = useState<"overview" | "step">("overview");
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<Step[]>([]);
+  const [villaMode, setVillaMode] = useState(false);
+  const prevFiltersRef = useRef<MarkerFilter | null>(null);
 
   useEffect(() => {
     setSteps(parseSteps(route.legs || []));
@@ -464,6 +460,24 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
     setMode("overview");
   }, []);
 
+  const toggleVillaMode = useCallback(() => {
+    if (!villaMode) {
+      prevFiltersRef.current = { ...filters };
+      setFilters({
+        hojre_vigepligt: true,
+        ubetinget_vigepligt: false,
+        trafiklys: false,
+        stopskilt: false,
+        speed_limits: false,
+      });
+      setVillaMode(true);
+    } else {
+      if (prevFiltersRef.current) setFilters(prevFiltersRef.current);
+      else setFilters({ hojre_vigepligt: true, ubetinget_vigepligt: true, trafiklys: true, stopskilt: true, speed_limits: true });
+      setVillaMode(false);
+    }
+  }, [villaMode, filters, setFilters]);
+
   const goNextStep = useCallback(() => {
     setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
   }, [steps.length]);
@@ -510,7 +524,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
   }, [mode, currentStep, steps, roads]);
 
   const FILTER_ITEMS: { key: keyof MarkerFilter; label: string; color: string }[] = [
-    { key: "hojre_vigepligt", label: "Hoejre vigepligt", color: "#ef4444" },
+    { key: "hojre_vigepligt", label: "Højre vigepligt", color: "#ef4444" },
     { key: "ubetinget_vigepligt", label: "Ubetinget vigepligt", color: "#3b82f6" },
     { key: "trafiklys", label: "Trafiklys", color: "#22c55e" },
     { key: "stopskilt", label: "Stopskilt", color: "#eab308" },
@@ -600,7 +614,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
         {!streetViewActive && panel === "filters" && (
           <div className="absolute bottom-2 left-3 right-3 z-10 bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-4 border border-slate-200">
             <div className="flex justify-between items-center mb-3">
-              <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">Vis paa kort</span>
+              <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">Vis på kort</span>
               <button onClick={() => setPanel("none")} className="text-slate-400 hover:text-slate-600 p-1 transition-colors">
                 <IconX />
               </button>
@@ -652,7 +666,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
             <div className="flex items-start gap-3 mb-3">
               <span className="text-2xl shrink-0 mt-0.5 w-8 text-center font-mono">{MANEUVER_ARROWS[stepData.maneuver] || "\u2191"}</span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 leading-snug">{stepData.instruction || "Fortsaet ligeud"}</p>
+                <p className="text-sm font-semibold text-slate-800 leading-snug">{stepData.instruction || "Fortsæt ligeud"}</p>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {stepData.distance_text}{stepData.duration_text ? ` -- ${stepData.duration_text}` : ""}
                 </p>
@@ -694,7 +708,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
                 <IconEye />
               </button>
               <button onClick={goNextStep} disabled={currentStep === steps.length - 1} className="flex-1 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 disabled:opacity-30 text-white py-3 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-1">
-                Naeste
+                Næste
                 <IconChevronRight />
               </button>
             </div>
@@ -706,13 +720,13 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
       {!streetViewActive && mode === "overview" && (
         <div className="bg-white/95 backdrop-blur-sm border-t border-slate-200 pb-[max(env(safe-area-inset-bottom),8px)]">
           <div className="flex items-center justify-around px-2 py-1.5">
+            <button onClick={toggleVillaMode} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs transition-colors ${villaMode ? "text-red-500 bg-red-50" : "text-slate-500"}`}>
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${villaMode ? "bg-red-500" : "bg-slate-400"}`}>H</span>
+              <span>Villa</span>
+            </button>
             <button onClick={() => setPanel(panel === "filters" ? "none" : "filters")} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs transition-colors ${panel === "filters" ? "text-blue-500 bg-blue-50" : "text-slate-500"}`}>
               <IconFilter />
               <span>Filter</span>
-            </button>
-            <button onClick={() => setPanel(panel === "villas" ? "none" : "villas")} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs transition-colors ${panel === "villas" ? "text-blue-500 bg-blue-50" : "text-slate-500"}`}>
-              <IconHouse />
-              <span>Villa</span>
             </button>
             <button onClick={openStreetViewAtStep} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-slate-500 transition-colors">
               <IconEye />

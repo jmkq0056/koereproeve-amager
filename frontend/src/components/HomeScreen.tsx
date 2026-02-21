@@ -83,10 +83,10 @@ export default function HomeScreen({
       <div className="max-w-lg mx-auto px-4 pt-[max(env(safe-area-inset-top),16px)] pb-[max(env(safe-area-inset-bottom),24px)]">
         {/* Header */}
         <div className="pt-4 pb-6">
-          <h1 className="text-2xl font-bold tracking-tight">Koereproeve Amager</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Køreprøve Amager</h1>
           <div className="flex items-center gap-1.5 mt-1.5 text-slate-400 text-sm">
             <IconMapPin />
-            <span>Vindblaes Alle 2, 2770 Kastrup</span>
+            <span>Vindblæs Alle 2, 2770 Kastrup</span>
           </div>
         </div>
 
@@ -116,7 +116,7 @@ export default function HomeScreen({
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
                 {includeMotorway
-                  ? "Via Amager Motorvejen \u2192 Taarnby Rundkoersel"
+                  ? "Via Amager Motorvejen \u2192 Tårnby Rundkørsel"
                   : "Direkte gennem villakvarterer"}
               </p>
             </div>
@@ -145,18 +145,18 @@ export default function HomeScreen({
           )}
 
           <p className="text-xs text-slate-500 mt-3 text-center">
-            Maalsaetning: 25-35 min (max 40 min) -- varierer hver gang
+            Målsætning: 25-35 min (max 40 min) — varierer hver gang
           </p>
         </div>
 
         {/* Højre Vigepligt Trainer */}
         <div className="bg-slate-800/80 rounded-2xl p-5 mb-4 border border-red-500/30">
           <h2 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">
-            Hoejre Vigepligt Traening
+            Højre Vigepligt Træning
           </h2>
           <p className="text-xs text-slate-400 mb-4">
-            Oev alle {hojreCount || "..."} hoejre vigepligt kryds en for en.
-            Se hvert kryds paa kort og i gadevisning indtil du kender dem alle.
+            Øv alle {hojreCount || "..."} højre vigepligt kryds én for én.
+            Se hvert kryds på kort og i gadevisning indtil du kender dem alle.
           </p>
           <button
             onClick={onStartTrainer}
@@ -164,7 +164,7 @@ export default function HomeScreen({
             className="w-full bg-red-500 hover:bg-red-600 active:bg-red-700 disabled:opacity-50 text-white py-3.5 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
           >
             <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">H</span>
-            Start traening ({hojreCount} kryds)
+            Start træning ({hojreCount} kryds)
           </button>
         </div>
 
@@ -266,7 +266,7 @@ export default function HomeScreen({
               <span className="w-6 h-6 rounded-full bg-red-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border-2 border-white shadow-sm">
                 H
               </span>
-              <span className="text-slate-300">Hoejre vigepligt</span>
+              <span className="text-slate-300">Højre vigepligt</span>
             </div>
             <div className="flex items-center gap-2.5">
               <span className="w-6 h-6 rounded-full bg-blue-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border-2 border-white shadow-sm">
@@ -294,7 +294,7 @@ export default function HomeScreen({
               <span className="w-7 h-7 rounded-full bg-white border-[3px] border-red-600 shrink-0 flex items-center justify-center text-[10px] font-bold text-black shadow-sm">
                 50
               </span>
-              <span className="text-slate-300 text-sm">Fartskilt (roed ring med tal)</span>
+              <span className="text-slate-300 text-sm">Fartskilt (rød ring med tal)</span>
             </div>
           </div>
         </div>
