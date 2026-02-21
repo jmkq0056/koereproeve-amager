@@ -19,56 +19,46 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.openstreetmap.ru/api/interpreter",
 ]
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0",
-]
-
-_next_ep = 0
-
 START_LAT = 55.634464
 START_LNG = 12.650135
 RADIUS = 4000
 
-
-def _random_headers() -> dict:
-    """Rotate User-Agent and spoof X-Forwarded-For with random IP."""
-    ip = f"{random.randint(1,223)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,254)}"
-    return {
-        "User-Agent": random.choice(USER_AGENTS),
-        "X-Forwarded-For": ip,
-        "X-Real-IP": ip,
-        "Accept": "application/json",
-        "Referer": random.choice([
-            "https://www.openstreetmap.org/",
-            "https://wiki.openstreetmap.org/",
-            "https://overpass-turbo.eu/",
-        ]),
-    }
+_query_count = 0
 
 
 async def query_overpass(query: str, max_retries: int = 8) -> dict:
-    global _next_ep
+    global _query_count
+    _query_count += 1
+
+    # Polite delay between queries to avoid rate limits
+    if _query_count > 1:
+        await asyncio.sleep(5)
+
     endpoints = OVERPASS_ENDPOINTS[:]
     random.shuffle(endpoints)
+
+    headers = {
+        "User-Agent": "KoereproeveAmager/1.0 (educational driving test app)",
+        "Accept": "application/json",
+    }
 
     for attempt in range(max_retries):
         url = endpoints[attempt % len(endpoints)]
         short = url.split("//")[1].split("/")[0]
-        headers = _random_headers()
-        print(f"  [{short}] attempt {attempt+1} (IP: {headers['X-Forwarded-For']})...")
+        print(f"  [{short}] attempt {attempt+1}...")
         try:
             async with httpx.AsyncClient(timeout=120, follow_redirects=True) as c:
                 resp = await c.post(url, data={"data": query}, headers=headers)
                 if resp.status_code == 200:
                     return resp.json()
-                print(f"  [{short}] status {resp.status_code}, rotating...")
+                if resp.status_code == 429:
+                    print(f"  [{short}] rate limited, waiting 30s...")
+                    await asyncio.sleep(30)
+                else:
+                    print(f"  [{short}] status {resp.status_code}, rotating...")
         except Exception as e:
             print(f"  [{short}] error: {type(e).__name__}, rotating...")
-        wait = 2 + attempt * 1.5
+        wait = 5 + attempt * 3
         await asyncio.sleep(wait)
 
     print("  ALL endpoints exhausted after retries")
@@ -150,95 +140,134 @@ async def seed_signed_intersections():
 
 async def seed_hojre_vigepligt(signed_ids: set):
     """
-    Højre vigepligt (færdselsloven § 26, stk. 4) ONLY applies at intersections where:
-    1. ALL roads meeting are equal-priority (residential, living_street, unclassified)
-    2. No traffic signals, give_way signs, or stop signs
-    3. Not a roundabout
-    4. At least 2 distinct equal-priority roads meet (= node shared by 2+ ways)
-
-    If ANY tertiary/secondary/primary/trunk/motorway road touches the node,
-    it is NOT højre vigepligt — the smaller road has ubetinget vigepligt.
-    Service roads, tracks, paths are also excluded (ubetinget vigepligt per § 26 stk. 3).
+    Højre vigepligt ONLY deep inside villa quarters:
+    - ALL roads at node are residential (nothing else)
+    - No footway/cycleway/pedestrian shares any node with the connecting residential ways
+    - Connecting residential ways have no sidewalk/cycleway tags
+    - No signs, roundabouts, cobblestone surfaces
     """
-    print("\n=== HØJRE VIGEPLIGT (equal-priority residential junctions, no signs) ===")
+    print("\n=== HØJRE VIGEPLIGT (villa quarter residential junctions only) ===")
+    from collections import defaultdict
 
-    # Get ALL road ways in the area — we need to check highway type per node
+    # Fetch residential + nearby infra + bigger roads in one query
     query = f"""
-    [out:json][timeout:90];
+    [out:json][timeout:120];
     (
-      way["highway"~"residential|living_street|unclassified|tertiary|secondary|primary|trunk|motorway|service|track"](around:{RADIUS},{START_LAT},{START_LNG});
+      way["highway"~"residential|tertiary|secondary|primary|trunk|motorway|service|track|footway|cycleway|pedestrian|path|steps|living_street|unclassified"](around:{RADIUS},{START_LAT},{START_LNG});
     );
     out body;
     """
     data = await query_overpass(query)
 
-    # Equal-priority road types where højre vigepligt can apply
-    EQUAL_PRIORITY = {"residential", "living_street", "unclassified"}
-    # Higher-priority roads — if these touch a node, it's NOT højre vigepligt
-    HIGHER_PRIORITY = {"tertiary", "secondary", "primary", "trunk", "motorway",
-                       "tertiary_link", "secondary_link", "primary_link", "trunk_link", "motorway_link"}
-    # Subordinate roads — ubetinget vigepligt per § 26 stk. 3
-    SUBORDINATE = {"service", "track", "path", "footway", "cycleway", "pedestrian"}
+    DISQUALIFYING_SURFACES = {"cobblestone", "paving_stones", "sett", "unhewn_cobblestone"}
+    INFRA_TYPES = {"footway", "cycleway", "pedestrian", "path", "steps", "crossing"}
 
-    # Track: for each node, which highway types touch it, and how many distinct ways
-    node_road_types: dict[int, set] = {}  # node_id -> set of highway types
-    node_way_ids: dict[int, set] = {}     # node_id -> set of way IDs
+    # Per node: which highway types touch it, which way IDs
+    node_road_types: dict[int, set] = {}
+    node_way_ids: dict[int, set] = {}
+    node_poison: dict[int, set] = {}
+
+    # Per way: its node list and tags
+    way_nodes: dict[int, list[int]] = {}
+    residential_way_ids: set[int] = set()
+
+    # All nodes that belong to infrastructure ways (footway/cycleway/etc.)
+    infra_nodes: set[int] = set()
 
     for el in data.get("elements", []):
         if el["type"] != "way":
             continue
-        hw = el.get("tags", {}).get("highway", "")
+        tags = el.get("tags", {})
+        hw = tags.get("highway", "")
         way_id = el["id"]
-        is_roundabout = el.get("tags", {}).get("junction", "") in ("roundabout", "circular")
+        nodes = el.get("nodes", [])
+        way_nodes[way_id] = nodes
+        is_roundabout = tags.get("junction", "") in ("roundabout", "circular")
+        surface = tags.get("surface", "")
+        sidewalk = tags.get("sidewalk", "no")
+        cycleway_tag = tags.get("cycleway", "no")
+        has_infra_tags = sidewalk not in ("no", "none", "") or cycleway_tag not in ("no", "none", "")
 
-        for nid in el.get("nodes", []):
+        if hw == "residential":
+            residential_way_ids.add(way_id)
+
+        # Collect all nodes on infrastructure ways
+        if hw in INFRA_TYPES:
+            infra_nodes.update(nodes)
+
+        for nid in nodes:
             if nid not in node_road_types:
                 node_road_types[nid] = set()
                 node_way_ids[nid] = set()
-            if is_roundabout:
-                node_road_types[nid].add("_roundabout")  # poison flag
+                node_poison[nid] = set()
             node_road_types[nid].add(hw)
             node_way_ids[nid].add(way_id)
+            if is_roundabout:
+                node_poison[nid].add("roundabout")
+            if surface in DISQUALIFYING_SURFACES:
+                node_poison[nid].add("surface")
+            if hw == "residential" and has_infra_tags:
+                node_poison[nid].add("sidewalk_on_road")
 
-    # Now get the actual node coordinates (only for residential road nodes)
+    print(f"  {len(infra_nodes)} infrastructure nodes (footway/cycleway/pedestrian)")
+    print(f"  {len(residential_way_ids)} residential ways")
+
+    # For each residential way, check if ANY of its nodes is also on an infra way
+    # If so, ALL nodes on that way are "tainted" — it's not a pure villa street
+    tainted_way_ids: set[int] = set()
+    for wid in residential_way_ids:
+        nodes = way_nodes.get(wid, [])
+        for nid in nodes:
+            if nid in infra_nodes:
+                tainted_way_ids.add(wid)
+                break
+
+    print(f"  {len(tainted_way_ids)} residential ways touch a footway/cycleway (tainted)")
+
+    # Get node coordinates
     nodes_query = f"""
     [out:json][timeout:90];
-    way["highway"~"residential|living_street|unclassified"](around:{RADIUS},{START_LAT},{START_LNG});
+    way["highway"="residential"](around:{RADIUS},{START_LAT},{START_LNG});
     node(w);
     out body;
     """
     nodes_data = await query_overpass(nodes_query)
     all_nodes = {el["id"]: el for el in nodes_data.get("elements", []) if el["type"] == "node"}
 
+    # Check node-level tags
+    for nid, el in all_nodes.items():
+        tags = el.get("tags", {})
+        node_hw = tags.get("highway", "")
+        if node_hw in ("crossing", "give_way", "stop", "traffic_signals"):
+            if nid not in node_poison:
+                node_poison[nid] = set()
+            node_poison[nid].add(f"node:{node_hw}")
+        if tags.get("crossing"):
+            if nid not in node_poison:
+                node_poison[nid] = set()
+            node_poison[nid].add("crossing")
+
     hojre = []
+    skip_reasons = defaultdict(int)
     for nid, road_types in node_road_types.items():
-        # Must be in our node set
         if nid not in all_nodes:
             continue
-        # Must have 2+ distinct ways meeting (actual junction)
-        if len(node_way_ids.get(nid, set())) < 2:
+        way_ids = node_way_ids.get(nid, set())
+        if len(way_ids) < 2:
             continue
-        # Not signed (traffic signals, give_way, stop)
         if nid in signed_ids:
+            skip_reasons["signed"] += 1
             continue
-        # Not a roundabout
-        if "_roundabout" in road_types:
+        if node_poison.get(nid):
+            skip_reasons["poison"] += 1
             continue
-        # ALL road types at this node must be equal-priority
-        # Filter out non-highway artifacts
-        actual_types = road_types - {"_roundabout"}
-        if not actual_types:
+        # ALL road types at this node must be residential only
+        if road_types != {"residential"}:
+            skip_reasons["not_pure_residential"] += 1
             continue
-        # If ANY higher-priority or subordinate road touches this node, skip
-        if actual_types & HIGHER_PRIORITY:
-            continue
-        if actual_types & SUBORDINATE:
-            continue
-        # Must have at least one equal-priority type
-        if not (actual_types & EQUAL_PRIORITY):
-            continue
-        # All types must be equal-priority
-        if not actual_types.issubset(EQUAL_PRIORITY):
+        # None of the connecting residential ways should be tainted (touch infra)
+        if way_ids & tainted_way_ids:
+            skip_reasons["way_touches_infra"] += 1
             continue
 
         el = all_nodes[nid]
@@ -247,7 +276,7 @@ async def seed_hojre_vigepligt(signed_ids: set):
             "lat": el["lat"],
             "lng": el["lon"],
             "type": "hojre_vigepligt",
-            "way_count": len(node_way_ids[nid]),
+            "way_count": len(way_ids),
         })
 
     col = db["hojre_vigepligt"]
@@ -255,7 +284,7 @@ async def seed_hojre_vigepligt(signed_ids: set):
     if hojre:
         await col.insert_many(hojre)
     print(f"  Stored {len(hojre)} højre vigepligt junctions (out of {len(all_nodes)} residential nodes)")
-    print(f"  (Only intersections where ALL roads are residential/living_street/unclassified)")
+    print(f"  Skip reasons: {dict(skip_reasons)}")
 
 
 async def seed_villa_streets():

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verify Hojre Vigepligt</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }
+
+  .header { padding: 12px 16px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+  .header h1 { font-size: 16px; font-weight: 700; }
+  .stats { display: flex; gap: 12px; font-size: 13px; color: #94a3b8; }
+  .stat { display: flex; align-items: center; gap: 4px; }
+  .stat b { color: #e2e8f0; }
+  .progress-bar { flex: 1; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; min-width: 100px; }
+  .progress-fill { height: 100%; background: #3b82f6; transition: width 0.3s; border-radius: 3px; }
+
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #map { flex: 1; }
+
+  .controls { padding: 16px; background: #1e293b; border-top: 1px solid #334155; flex-shrink: 0; }
+  .info { text-align: center; margin-bottom: 12px; }
+  .info .osm-id { font-size: 12px; color: #64748b; }
+  .info .coords { font-size: 13px; color: #94a3b8; margin-top: 2px; }
+  .info .way-count { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+  .buttons { display: flex; gap: 10px; }
+  .btn { flex: 1; padding: 14px; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+  .btn:active { transform: scale(0.97); }
+  .btn-no { background: #dc2626; color: white; }
+  .btn-no:hover { background: #b91c1c; }
+  .btn-yes { background: #16a34a; color: white; }
+  .btn-yes:hover { background: #15803d; }
+  .btn-skip { background: #334155; color: #94a3b8; }
+  .btn-skip:hover { background: #475569; }
+  .btn-sv { background: #7c3aed; color: white; flex: 0.6; font-size: 13px; }
+  .btn-sv:hover { background: #6d28d9; }
+  .btn-sv.active { background: #4c1d95; }
+  .btn-save { background: #3b82f6; color: white; width: 100%; margin-top: 10px; }
+  .btn-save:hover { background: #2563eb; }
+  .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .done { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 16px; padding: 24px; text-align: center; }
+  .done h2 { font-size: 24px; }
+  .done p { color: #94a3b8; font-size: 14px; }
+
+  .loading { display: flex; align-items: center; justify-content: center; flex: 1; font-size: 16px; color: #94a3b8; }
+
+  .keyboard-hint { text-align: center; font-size: 11px; color: #475569; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Verify Hojre Vigepligt</h1>
+  <div class="stats">
+    <div class="stat">Total: <b id="total">-</b></div>
+    <div class="stat">Kept: <b id="kept" style="color:#16a34a">0</b></div>
+    <div class="stat">Removed: <b id="removed" style="color:#dc2626">0</b></div>
+    <div class="stat">Left: <b id="left">-</b></div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+</div>
+
+<div class="main" id="main">
+  <div class="loading" id="loading">Loading intersections...</div>
+</div>
+
+<script>
+const API = '';
+const G_KEY = 'AIzaSyCLjlBd3uCfymgXG6wNRf-gCwOzqGniVcA';
+const STORAGE_KEY = 'hojre_verify_state';
+
+let points = [];
+let currentIndex = 0;
+let decisions = {};
+let map = null;
+let marker = null;
+let isDone = false;
+let streetViewActive = false;
+let svService = null;
+
+function loadState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    decisions = saved.decisions || {};
+    currentIndex = saved.currentIndex || 0;
+  } catch(e) {}
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ decisions, currentIndex }));
+}
+
+function updateStats() {
+  const kept = Object.values(decisions).filter(d => d === 'keep').length;
+  const removed = Object.values(decisions).filter(d => d === 'remove').length;
+  const reviewed = kept + removed;
+  document.getElementById('total').textContent = points.length;
+  document.getElementById('kept').textContent = kept;
+  document.getElementById('removed').textContent = removed;
+  document.getElementById('left').textContent = points.length - reviewed;
+  document.getElementById('progress').style.width = points.length ? `${(reviewed / points.length) * 100}%` : '0%';
+  const rc = document.getElementById('removeCount');
+  if (rc) rc.textContent = removed;
+}
+
+function findNextUnreviewed(fromIndex) {
+  for (let i = fromIndex; i < points.length; i++) {
+    if (!decisions[points[i].osm_id]) return i;
+  }
+  for (let i = 0; i < fromIndex; i++) {
+    if (!decisions[points[i].osm_id]) return i;
+  }
+  return -1;
+}
+
+function toggleStreetView() {
+  if (!map) return;
+  const sv = map.getStreetView();
+  if (streetViewActive) {
+    sv.setVisible(false);
+    streetViewActive = false;
+    const btn = document.getElementById('btnSV');
+    if (btn) btn.classList.remove('active');
+  } else {
+    const pt = points[currentIndex];
+    if (!pt) return;
+    if (!svService) svService = new google.maps.StreetViewService();
+    svService.getPanorama(
+      { location: { lat: pt.lat, lng: pt.lng }, radius: 100, preference: google.maps.StreetViewPreference.NEAREST, source: google.maps.StreetViewSource.OUTDOOR },
+      (data, status) => {
+        if (status === google.maps.StreetViewStatus.OK && data?.location?.latLng) {
+          sv.setPosition(data.location.latLng);
+          sv.setPov({ heading: 0, pitch: -10 });
+          sv.setZoom(0);
+          sv.setVisible(true);
+          streetViewActive = true;
+          const btn = document.getElementById('btnSV');
+          if (btn) btn.classList.add('active');
+        }
+      }
+    );
+  }
+}
+
+function showPoint(index) {
+  if (index < 0 || index >= points.length) {
+    showDone();
+    return;
+  }
+  currentIndex = index;
+  const pt = points[index];
+
+  // Close current street view before navigating
+  if (streetViewActive && map) {
+    map.getStreetView().setVisible(false);
+    streetViewActive = false;
+  }
+
+  if (!map) {
+    document.getElementById('main').innerHTML = `
+      <div id="map"></div>
+      <div class="controls">
+        <div class="info">
+          <div class="osm-id" id="osmLabel"></div>
+          <div class="coords" id="coordsLabel"></div>
+          <div class="way-count" id="wayLabel"></div>
+        </div>
+        <div class="buttons">
+          <button class="btn btn-no" id="btnNo" onclick="decide('remove')">NO - False</button>
+          <button class="btn btn-sv" id="btnSV" onclick="toggleStreetView()">SV</button>
+          <button class="btn btn-skip" id="btnSkip" onclick="skip()">Skip</button>
+          <button class="btn btn-yes" id="btnYes" onclick="decide('keep')">YES - Real</button>
+        </div>
+        <button class="btn btn-save" id="btnPartialSave" onclick="submitDeletions()" style="margin-top:8px;font-size:13px;padding:10px;">Delete <span id="removeCount">0</span> false positives now</button>
+        <div class="keyboard-hint">A = No | W = Street View | S = Skip | D = Yes | Z = Undo | Q = Delete now</div>
+      </div>
+    `;
+    map = new google.maps.Map(document.getElementById('map'), {
+      center: { lat: pt.lat, lng: pt.lng },
+      zoom: 19,
+      mapTypeId: 'hybrid',
+      mapId: 'verify-map',
+      streetViewControl: true,
+      streetViewControlOptions: { position: google.maps.ControlPosition.RIGHT_TOP },
+      zoomControl: true,
+      zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_TOP },
+      fullscreenControl: false,
+      mapTypeControl: false,
+    });
+
+    // Listen for street view visibility changes
+    const sv = map.getStreetView();
+    sv.addListener('visible_changed', () => {
+      streetViewActive = sv.getVisible();
+      const btn = document.getElementById('btnSV');
+      if (btn) {
+        if (streetViewActive) btn.classList.add('active');
+        else btn.classList.remove('active');
+      }
+    });
+
+    google.maps.importLibrary('marker').then(() => {
+      const el = document.createElement('div');
+      el.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#ef4444;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
+      marker = new google.maps.marker.AdvancedMarkerElement({
+        map, position: { lat: pt.lat, lng: pt.lng }, content: el
+      });
+    });
+  } else {
+    map.panTo({ lat: pt.lat, lng: pt.lng });
+    map.setZoom(19);
+    if (marker) marker.position = { lat: pt.lat, lng: pt.lng };
+  }
+
+  document.getElementById('osmLabel').textContent = `OSM ID: ${pt.osm_id} (#${index + 1} of ${points.length})`;
+  document.getElementById('coordsLabel').textContent = `${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}`;
+  document.getElementById('wayLabel').textContent = `${pt.way_count} roads meeting`;
+  updateStats();
+  saveState();
+
+  // Auto-open street view at this point
+  setTimeout(() => {
+    if (!svService) svService = new google.maps.StreetViewService();
+    svService.getPanorama(
+      { location: { lat: pt.lat, lng: pt.lng }, radius: 100, preference: google.maps.StreetViewPreference.NEAREST, source: google.maps.StreetViewSource.OUTDOOR },
+      (data, status) => {
+        if (status === google.maps.StreetViewStatus.OK && data?.location?.latLng) {
+          const sv = map.getStreetView();
+          sv.setPosition(data.location.latLng);
+          sv.setPov({ heading: 0, pitch: -10 });
+          sv.setZoom(0);
+          sv.setVisible(true);
+        }
+      }
+    );
+  }, 300);
+}
+
+function decide(decision) {
+  if (isDone) return;
+  const pt = points[currentIndex];
+  decisions[pt.osm_id] = decision;
+  saveState();
+
+  const next = findNextUnreviewed(currentIndex + 1);
+  if (next === -1) {
+    showDone();
+  } else {
+    showPoint(next);
+  }
+}
+
+function skip() {
+  const next = currentIndex + 1 < points.length ? currentIndex + 1 : 0;
+  showPoint(next);
+}
+
+function undoLast() {
+  const decided = Object.keys(decisions);
+  if (decided.length === 0) return;
+  const lastOsmId = parseInt(decided[decided.length - 1]);
+  delete decisions[lastOsmId];
+  saveState();
+  const idx = points.findIndex(p => p.osm_id === lastOsmId);
+  if (idx >= 0) {
+    isDone = false;
+    showPoint(idx);
+  }
+  updateStats();
+}
+
+function showDone() {
+  isDone = true;
+  const kept = Object.values(decisions).filter(d => d === 'keep').length;
+  const removed = Object.values(decisions).filter(d => d === 'remove').length;
+  const removeIds = Object.entries(decisions).filter(([_,d]) => d === 'remove').map(([id,_]) => parseInt(id));
+
+  document.getElementById('main').innerHTML = `
+    <div class="done">
+      <h2>All reviewed!</h2>
+      <p>Kept: ${kept} | Removing: ${removed}</p>
+      <button class="btn btn-save" id="btnSave" onclick="submitDeletions()">Delete ${removed} false positives from database</button>
+      <button class="btn btn-skip" style="width:100%" onclick="resetAll()">Reset and start over</button>
+      <p style="font-size:12px;color:#475569">IDs to remove: ${removeIds.length}</p>
+    </div>
+  `;
+  map = null;
+  marker = null;
+  updateStats();
+}
+
+async function submitDeletions() {
+  const removeIds = Object.entries(decisions).filter(([_,d]) => d === 'remove').map(([id,_]) => parseInt(id));
+  if (removeIds.length === 0) return;
+
+  // Find whichever save button exists (partial or final)
+  const btn = document.getElementById('btnPartialSave') || document.getElementById('btnSave');
+  if (!btn) return;
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Deleting...';
+
+  try {
+    const res = await fetch(`${API}/api/overpass/hojre-vigepligt/bulk-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ osm_ids: removeIds }),
+    });
+    const data = await res.json();
+    btn.textContent = `Deleted ${data.deleted}!`;
+    btn.style.background = '#16a34a';
+    // Remove deleted ones from local points array so they don't reappear
+    points = points.filter(p => !removeIds.includes(p.osm_id));
+    // Clear only the 'remove' decisions (keep the 'keep' ones)
+    for (const id of removeIds) {
+      delete decisions[id];
+    }
+    saveState();
+    updateStats();
+    setTimeout(() => {
+      btn.style.background = '#3b82f6';
+      btn.disabled = false;
+      btn.innerHTML = `Delete <span id="removeCount">0</span> false positives now`;
+      updateStats();
+    }, 2000);
+  } catch(e) {
+    btn.textContent = 'Error: ' + e.message;
+    btn.style.background = '#dc2626';
+    btn.disabled = false;
+  }
+}
+
+function resetAll() {
+  localStorage.removeItem(STORAGE_KEY);
+  decisions = {};
+  currentIndex = 0;
+  isDone = false;
+  map = null;
+  marker = null;
+  document.getElementById('main').innerHTML = '<div class="loading">Reloading...</div>';
+  init();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (isDone) return;
+  if (e.key === 'a' || e.key === 'A') decide('remove');
+  else if (e.key === 'd' || e.key === 'D') decide('keep');
+  else if (e.key === 's' || e.key === 'S') skip();
+  else if (e.key === 'w' || e.key === 'W') toggleStreetView();
+  else if (e.key === 'z' || e.key === 'Z') undoLast();
+  else if (e.key === 'q' || e.key === 'Q') submitDeletions();
+});
+
+async function init() {
+  loadState();
+  try {
+    const res = await fetch(`${API}/api/overpass/hojre-vigepligt`);
+    const data = await res.json();
+    points = data.hojre_vigepligt || [];
+    updateStats();
+
+    const next = findNextUnreviewed(currentIndex);
+    if (next === -1 && Object.keys(decisions).length > 0) {
+      showDone();
+    } else {
+      showPoint(next >= 0 ? next : 0);
+    }
+  } catch(e) {
+    document.getElementById('loading').textContent = 'Error: ' + e.message;
+  }
+}
+
+function loadMaps() {
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${G_KEY}&libraries=marker,streetView&v=weekly&callback=init`;
+  script.async = true;
+  document.head.appendChild(script);
+}
+
+window.init = init;
+loadMaps();
+</script>
+</body>
+</html>

@@ -33,3 +33,13 @@ async def get_hojre_vigepligt():
         "hojre_vigepligt": hojre,
         "signed": signed,
     }
+
+
+@router.post("/hojre-vigepligt/bulk-delete")
+async def bulk_delete_hojre(body: dict):
+    """Delete false positive højre vigepligt by osm_id list."""
+    osm_ids = body.get("osm_ids", [])
+    if not osm_ids:
+        return {"deleted": 0}
+    result = await hojre_col.delete_many({"osm_id": {"$in": osm_ids}})
+    return {"deleted": result.deleted_count}

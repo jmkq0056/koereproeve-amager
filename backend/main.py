@@ -16,6 +16,9 @@ allowed_origins = [
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:3000",
+    "http://localhost:8080",
+    "capacitor://localhost",
+    "ionic://localhost",
 ]
 
 app.add_middleware(
@@ -37,6 +40,14 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"error": str(exc), "detail": tb},
     )
 
+
+from fastapi.responses import FileResponse
+import os
+
+@app.get("/verify")
+async def verify_tool():
+    path = os.path.join(os.path.dirname(__file__), "..", "tools", "verify_hojre.html")
+    return FileResponse(os.path.abspath(path), media_type="text/html")
 
 app.include_router(routes_router, prefix="/api/routes", tags=["routes"])
 app.include_router(villa_router, prefix="/api/villa", tags=["villa"])

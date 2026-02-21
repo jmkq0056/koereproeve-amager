@@ -5,8 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Køreprøve Amager',
   webDir: 'dist',
   server: {
-    url: 'https://frontend-production-22c6.up.railway.app',
-    cleartext: true,
+    allowNavigation: ['backend-production-4931.up.railway.app'],
   },
 };
 
