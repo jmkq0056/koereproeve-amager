@@ -74,4 +74,4 @@ export type MarkerFilter = {
   speed_limits: boolean;
 };
 
-export type Screen = "home" | "map" | "streetview";
+export type Screen = "home" | "map" | "streetview" | "trainer";

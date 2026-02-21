@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import HomeScreen from "./components/HomeScreen";
 import MapScreen from "./components/MapScreen";
+import HojreTrainer from "./components/HojreTrainer";
 import {
   fetchRoute,
   fetchHojreVigepligt,
@@ -118,6 +119,10 @@ function App() {
     setScreen("home");
   }, []);
 
+  const handleStartTrainer = useCallback(() => {
+    setScreen("trainer");
+  }, []);
+
   if (!mapsLoaded) {
     return (
       <div className="h-full flex items-center justify-center bg-slate-900">
@@ -127,6 +132,11 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  if (screen === "trainer") {
+    const hojreOnly = intersections.filter((i) => i.type === "hojre_vigepligt");
+    return <HojreTrainer junctions={hojreOnly} onBack={handleBackToHome} />;
   }
 
   if (screen === "map" && activeRoute) {
@@ -144,9 +154,13 @@ function App() {
     );
   }
 
+  const hojreCount = intersections.filter((i) => i.type === "hojre_vigepligt").length;
+
   return (
     <HomeScreen
       onGenerateRoute={handleGenerateRoute}
+      onStartTrainer={handleStartTrainer}
+      hojreCount={hojreCount}
       loading={routeLoading}
       dataLoading={dataLoading}
       error={error}

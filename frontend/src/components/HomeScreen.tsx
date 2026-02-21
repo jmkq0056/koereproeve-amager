@@ -3,6 +3,8 @@ import type { RouteData, VillaStreet } from "../types";
 
 interface Props {
   onGenerateRoute: (includeMotorway: boolean) => void;
+  onStartTrainer: () => void;
+  hojreCount: number;
   loading: boolean;
   dataLoading: boolean;
   error: string | null;
@@ -63,6 +65,8 @@ const IconHighway = () => (
 
 export default function HomeScreen({
   onGenerateRoute,
+  onStartTrainer,
+  hojreCount,
   loading,
   dataLoading,
   error,
@@ -143,6 +147,25 @@ export default function HomeScreen({
           <p className="text-xs text-slate-500 mt-3 text-center">
             Maalsaetning: 25-35 min (max 40 min) -- varierer hver gang
           </p>
+        </div>
+
+        {/* Højre Vigepligt Trainer */}
+        <div className="bg-slate-800/80 rounded-2xl p-5 mb-4 border border-red-500/30">
+          <h2 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">
+            Hoejre Vigepligt Traening
+          </h2>
+          <p className="text-xs text-slate-400 mb-4">
+            Oev alle {hojreCount || "..."} hoejre vigepligt kryds en for en.
+            Se hvert kryds paa kort og i gadevisning indtil du kender dem alle.
+          </p>
+          <button
+            onClick={onStartTrainer}
+            disabled={hojreCount === 0}
+            className="w-full bg-red-500 hover:bg-red-600 active:bg-red-700 disabled:opacity-50 text-white py-3.5 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+          >
+            <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">H</span>
+            Start traening ({hojreCount} kryds)
+          </button>
         </div>
 
         {/* Saved Routes */}
