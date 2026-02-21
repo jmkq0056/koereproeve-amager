@@ -1,6 +1,9 @@
 import axios from "axios";
 
-const BASE = import.meta.env.VITE_API_URL || "";
+const PROD_BACKEND = "https://backend-production-4931.up.railway.app";
+const isNative = typeof window !== "undefined" && (window.location.protocol === "capacitor:" || window.location.protocol === "ionic:");
+const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+const BASE = isNative || !isLocalhost ? PROD_BACKEND : (import.meta.env.VITE_API_URL || "");
 const api = axios.create({ baseURL: `${BASE}/api` });
 
 export async function fetchRoute(includeMotorway: boolean) {
