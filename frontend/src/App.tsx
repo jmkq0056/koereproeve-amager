@@ -1,20 +1,26 @@
 import { useState, useEffect, useCallback } from "react";
-import MapView from "./components/MapView";
-import ControlPanel from "./components/ControlPanel";
-import VillaList from "./components/VillaList";
+import HomeScreen from "./components/HomeScreen";
+import MapScreen from "./components/MapScreen";
 import {
   fetchRoute,
   fetchHojreVigepligt,
   fetchSpeedLimits,
   fetchVillaAreas,
 } from "./api";
-import type { Intersection, Road, VillaStreet, Neighborhood, MarkerFilter } from "./types";
+import type { Intersection, Road, VillaStreet, Neighborhood, RouteData, MarkerFilter, Screen } from "./types";
 
 const G_API_KEY = import.meta.env.VITE_G_API_KEY;
 
 function App() {
   const [mapsLoaded, setMapsLoaded] = useState(false);
-  const [includeMotorway, setIncludeMotorway] = useState(true);
+  const [screen, setScreen] = useState<Screen>("home");
+
+  // Data
+  const [intersections, setIntersections] = useState<Intersection[]>([]);
+  const [roads, setRoads] = useState<Road[]>([]);
+  const [villaStreets, setVillaStreets] = useState<VillaStreet[]>([]);
+  const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
+  const [activeRoute, setActiveRoute] = useState<RouteData | null>(null);
   const [filters, setFilters] = useState<MarkerFilter>({
     hojre_vigepligt: true,
     ubetinget_vigepligt: true,
@@ -22,25 +28,25 @@ function App() {
     stopskilt: true,
     speed_limits: true,
   });
-  const [intersections, setIntersections] = useState<Intersection[]>([]);
-  const [roads, setRoads] = useState<Road[]>([]);
-  const [villaStreets, setVillaStreets] = useState<VillaStreet[]>([]);
-  const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
-  const [routePolyline, setRoutePolyline] = useState<string>();
-  const [routeInfo, setRouteInfo] = useState<{
-    duration_minutes: number;
-    distance_meters: number;
-  } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [villaLoading, setVillaLoading] = useState(false);
 
-  // Load Google Maps script
+  // Loading states
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Saved routes from localStorage
+  const [savedRoutes, setSavedRoutes] = useState<RouteData[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("saved_routes") || "[]");
+    } catch { return []; }
+  });
+
+  // Load Google Maps
   useEffect(() => {
     if (document.querySelector('script[src*="maps.googleapis.com"]')) {
       setMapsLoaded(true);
       return;
     }
-
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${G_API_KEY}&libraries=geometry,marker&v=weekly`;
     script.async = true;
@@ -48,95 +54,111 @@ function App() {
     document.head.appendChild(script);
   }, []);
 
-  // Load initial data
+  // Load overpass data once maps are ready
   useEffect(() => {
     if (!mapsLoaded) return;
-
-    const loadData = async () => {
-      try {
-        const [vigepligtData, speedData] = await Promise.all([
-          fetchHojreVigepligt(),
-          fetchSpeedLimits(),
-        ]);
-
-        const allIntersections = [
-          ...vigepligtData.hojre_vigepligt,
-          ...vigepligtData.signed,
-        ];
-        setIntersections(allIntersections);
-        setRoads(speedData.roads);
-      } catch (err) {
-        console.error("Failed to load map data:", err);
-      }
-    };
-
-    const loadVillas = async () => {
-      setVillaLoading(true);
-      try {
-        const data = await fetchVillaAreas();
-        setVillaStreets(data.villa_streets);
-        setNeighborhoods(data.neighborhoods);
-      } catch (err) {
-        console.error("Failed to load villa areas:", err);
-      } finally {
-        setVillaLoading(false);
-      }
-    };
-
-    loadData();
-    loadVillas();
+    setDataLoading(true);
+    Promise.all([
+      fetchHojreVigepligt().catch(() => ({ hojre_vigepligt: [], signed: [] })),
+      fetchSpeedLimits().catch(() => ({ roads: [] })),
+      fetchVillaAreas().catch(() => ({ villa_streets: [], neighborhoods: [] })),
+    ]).then(([vigepligt, speed, villa]) => {
+      setIntersections([...vigepligt.hojre_vigepligt, ...vigepligt.signed]);
+      setRoads(speed.roads);
+      setVillaStreets(villa.villa_streets);
+      setNeighborhoods(villa.neighborhoods);
+    }).finally(() => setDataLoading(false));
   }, [mapsLoaded]);
 
-  const handleGenerateRoute = useCallback(async () => {
-    setLoading(true);
+  const handleGenerateRoute = useCallback(async (includeMotorway: boolean) => {
+    setRouteLoading(true);
+    setError(null);
     try {
       const data = await fetchRoute(includeMotorway);
       if (data.routes.length > 0) {
         const best = data.routes[0];
-        setRoutePolyline(best.polyline);
-        setRouteInfo({
+        const route: RouteData = {
           duration_minutes: best.duration_minutes,
           distance_meters: best.distance_meters,
-        });
+          polyline: best.polyline,
+          include_motorway: includeMotorway,
+          legs: best.legs,
+        };
+        setActiveRoute(route);
+        setScreen("map");
+      } else {
+        setError("Ingen ruter fundet");
       }
     } catch (err) {
-      console.error("Failed to generate route:", err);
+      setError("Kunne ikke beregne rute");
+      console.error(err);
     } finally {
-      setLoading(false);
+      setRouteLoading(false);
     }
-  }, [includeMotorway]);
+  }, []);
+
+  const handleSaveRoute = useCallback(() => {
+    if (!activeRoute) return;
+    const updated = [...savedRoutes, activeRoute];
+    setSavedRoutes(updated);
+    localStorage.setItem("saved_routes", JSON.stringify(updated));
+  }, [activeRoute, savedRoutes]);
+
+  const handleDeleteRoute = useCallback((index: number) => {
+    const updated = savedRoutes.filter((_, i) => i !== index);
+    setSavedRoutes(updated);
+    localStorage.setItem("saved_routes", JSON.stringify(updated));
+  }, [savedRoutes]);
+
+  const handleLoadRoute = useCallback((route: RouteData) => {
+    setActiveRoute(route);
+    setScreen("map");
+  }, []);
+
+  const handleBackToHome = useCallback(() => {
+    setActiveRoute(null);
+    setScreen("home");
+  }, []);
 
   if (!mapsLoaded) {
     return (
-      <div className="h-full flex items-center justify-center bg-gray-100">
-        <p className="text-gray-500">Indlæser kort...</p>
+      <div className="h-full flex items-center justify-center bg-slate-900">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Indlæser kort...</p>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="h-full relative">
-      <MapView
+  if (screen === "map" && activeRoute) {
+    return (
+      <MapScreen
+        route={activeRoute}
         intersections={intersections}
         roads={roads}
-        filters={filters}
-        routePolyline={routePolyline}
-      />
-      <ControlPanel
-        includeMotorway={includeMotorway}
-        setIncludeMotorway={setIncludeMotorway}
+        villaStreets={villaStreets}
+        neighborhoods={neighborhoods}
         filters={filters}
         setFilters={setFilters}
-        onGenerateRoute={handleGenerateRoute}
-        loading={loading}
-        routeInfo={routeInfo}
+        onBack={handleBackToHome}
+        onSave={handleSaveRoute}
       />
-      <VillaList
-        streets={villaStreets}
-        neighborhoods={neighborhoods}
-        loading={villaLoading}
-      />
-    </div>
+    );
+  }
+
+  return (
+    <HomeScreen
+      onGenerateRoute={handleGenerateRoute}
+      loading={routeLoading}
+      dataLoading={dataLoading}
+      error={error}
+      savedRoutes={savedRoutes}
+      onLoadRoute={handleLoadRoute}
+      onDeleteRoute={handleDeleteRoute}
+      villaStreets={villaStreets}
+      neighborhoods={neighborhoods}
+    />
   );
 }
 

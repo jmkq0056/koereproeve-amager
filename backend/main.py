@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+import traceback
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from config import get_settings
 from api.routes import router as routes_router
 from api.villa import router as villa_router
@@ -23,6 +25,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    print(f"ERROR on {request.url}: {exc}\n{tb}")
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc), "detail": tb},
+    )
+
 
 app.include_router(routes_router, prefix="/api/routes", tags=["routes"])
 app.include_router(villa_router, prefix="/api/villa", tags=["villa"])

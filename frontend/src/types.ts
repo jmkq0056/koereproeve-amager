@@ -18,14 +18,21 @@ export interface Road {
   geometry: LatLng[];
 }
 
-export interface Route {
-  index: number;
-  duration_seconds: number;
+export interface SavedRoute {
+  id: string;
+  name: string;
   duration_minutes: number;
   distance_meters: number;
   polyline: string;
   include_motorway: boolean;
-  within_target: boolean;
+  created_at: string;
+}
+
+export interface RouteData {
+  duration_minutes: number;
+  distance_meters: number;
+  polyline: string;
+  include_motorway: boolean;
   legs: any[];
 }
 
@@ -53,3 +60,5 @@ export type MarkerFilter = {
   stopskilt: boolean;
   speed_limits: boolean;
 };
+
+export type Screen = "home" | "map" | "streetview";
