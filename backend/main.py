@@ -9,9 +9,16 @@ settings = get_settings()
 
 app = FastAPI(title="Køreprøve Amager API")
 
+allowed_origins = [
+    settings.FRONTEND_URL,
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.up\.railway\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

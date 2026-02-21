@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
 
     class Config:
-        env_file = "../.env"
+        env_file = ".env"
+        extra = "ignore"
 
 
 @lru_cache

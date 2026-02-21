@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const api = axios.create({ baseURL: "/api" });
+const BASE = import.meta.env.VITE_API_URL || "";
+const api = axios.create({ baseURL: `${BASE}/api` });
 
 export async function fetchRoute(includeMotorway: boolean) {
   const { data } = await api.get("/routes/generate", {
