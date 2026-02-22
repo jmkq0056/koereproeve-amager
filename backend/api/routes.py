@@ -3,7 +3,7 @@ import math
 from fastapi import APIRouter, Depends
 import httpx
 from config import get_settings, Settings
-from db import routes_col, villa_col
+from db import routes_col, villa_col, hojre_col
 
 router = APIRouter()
 
@@ -30,19 +30,32 @@ def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 
 async def pick_spread_waypoints(count: int, min_dist_between: float = 300, max_dist_from_start: float = 2000) -> list[dict]:
     """
-    Randomly select villa street centers from MongoDB,
-    ensuring they are spread apart and within max_dist_from_start of the start point.
+    Select villa waypoints, prioritizing villas near højre vigepligt junctions.
+    Villas with more H junctions within 300m get picked more often.
     """
     all_villas = await villa_col.find({}, {"_id": 0, "lat": 1, "lng": 1, "name": 1}).to_list(10000)
     if not all_villas:
         return []
 
+    hojre_junctions = await hojre_col.find({}, {"_id": 0, "lat": 1, "lng": 1}).to_list(10000)
+
     # Only consider villas within range of start
     nearby = [v for v in all_villas
               if 200 < haversine(v["lat"], v["lng"], START_LAT, START_LNG) < max_dist_from_start]
-    random.shuffle(nearby)
-    selected: list[dict] = []
 
+    # Score each villa by number of H junctions within 300m
+    for v in nearby:
+        h_count = sum(1 for h in hojre_junctions
+                      if haversine(v["lat"], v["lng"], h["lat"], h["lng"]) < 300)
+        # Weight: villas with H junctions get 5x more likely per junction
+        v["_weight"] = 1 + h_count * 5
+
+    # Weighted shuffle: higher weight = more likely to appear early
+    for v in nearby:
+        v["_sort"] = random.random() ** (1.0 / v["_weight"])
+    nearby.sort(key=lambda v: v["_sort"], reverse=True)
+
+    selected: list[dict] = []
     for v in nearby:
         if len(selected) >= count:
             break
