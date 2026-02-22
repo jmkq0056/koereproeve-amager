@@ -394,12 +394,68 @@ async def seed_here_speed_limits():
         # Rate limit: ~10 req/s for free tier
         await asyncio.sleep(0.2)
 
-    # Deduplicate by grid cell (~50m)
+    # --- Phase 2: overlay OSM maxspeed data (actual mapped speed signs) ---
+    # HERE misses zone 30/40 signs in villa areas and some 60 km/h roads.
+    # OSM has explicit maxspeed tags from people mapping the real signs.
+    print("  Fetching OSM maxspeed data for overlay...")
+    osm_query = f"""
+    [out:json][timeout:60];
+    (
+      way["highway"]["maxspeed"](around:{RADIUS},{START_LAT},{START_LNG});
+    );
+    out body geom;
+    """
+    osm_data = await query_overpass(osm_query)
+
+    osm_points = []
+    for el in osm_data.get("elements", []):
+        tags = el.get("tags", {})
+        maxspeed_raw = tags.get("maxspeed", "")
+        # Parse: "50", "30", "60 km/h", etc.
+        try:
+            maxspeed = int(maxspeed_raw.split()[0])
+        except (ValueError, IndexError):
+            continue
+        if maxspeed <= 0 or maxspeed > 150:
+            continue
+
+        geometry = el.get("geometry", [])
+        if not geometry:
+            continue
+
+        # Sample every point along the road geometry
+        for point in geometry:
+            osm_points.append((point["lat"], point["lon"], maxspeed))
+
+    print(f"  {len(osm_points)} OSM speed points from maxspeed tags")
+
+    # Explicit overrides for known locations
+    # Start/parking area at Vindblæs Alle 2 — parking = 20 km/h
+    osm_points.append((START_LAT, START_LNG, 20))
+
+    # --- Phase 3: merge HERE + OSM, OSM overrides HERE ---
+    # First pass: HERE data
     seen = {}
     for lat, lng, speed in all_points:
         key = f"{round(lat * 2000)}_{round(lng * 2000)}"  # ~50m grid
         if key not in seen:
             seen[key] = {"lat": round(lat, 6), "lng": round(lng, 6), "speedLimit": speed, "units": "KPH", "placeId": key}
+
+    here_count = len(seen)
+
+    # Second pass: OSM overrides (actual mapped signs beat HERE defaults)
+    osm_added = 0
+    osm_overrides = 0
+    for lat, lng, speed in osm_points:
+        key = f"{round(lat * 2000)}_{round(lng * 2000)}"
+        if key not in seen:
+            seen[key] = {"lat": round(lat, 6), "lng": round(lng, 6), "speedLimit": speed, "units": "KPH", "placeId": key}
+            osm_added += 1
+        elif seen[key]["speedLimit"] != speed:
+            seen[key]["speedLimit"] = speed
+            osm_overrides += 1
+
+    print(f"  HERE: {here_count} cells, OSM added: {osm_added}, OSM overrides: {osm_overrides}")
 
     unique = list(seen.values())
 
@@ -407,7 +463,7 @@ async def seed_here_speed_limits():
     await col.drop()
     if unique:
         await col.insert_many(unique)
-    print(f"  Stored {len(unique)} unique HERE speed limit records")
+    print(f"  Stored {len(unique)} unique merged speed limit records")
 
 
 async def seed_villa_streets():
