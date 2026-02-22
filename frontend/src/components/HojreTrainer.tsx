@@ -1,9 +1,18 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import type { Intersection } from "../types";
+import type { Intersection, VillaStreet } from "../types";
 
 interface Props {
   junctions: Intersection[];
+  villaStreets: VillaStreet[];
   onBack: () => void;
+}
+
+function distM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 const START_LAT = 55.634464;
@@ -70,10 +79,18 @@ function createHMarker(size: number, active: boolean): HTMLDivElement {
   return el;
 }
 
-export default function HojreTrainer({ junctions, onBack }: Props) {
+function createStartMarker(): HTMLDivElement {
+  const el = document.createElement("div");
+  el.style.cssText = `width:32px;height:32px;border-radius:50%;background:#16a34a;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;color:white;font-family:system-ui;`;
+  el.textContent = "S";
+  return el;
+}
+
+export default function HojreTrainer({ junctions, villaStreets, onBack }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
+  const startMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const allMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const svServiceRef = useRef<google.maps.StreetViewService | null>(null);
 
@@ -93,6 +110,20 @@ export default function HojreTrainer({ junctions, onBack }: Props) {
   const total = junctions.length;
   const seenCount = seen.size;
   const allDone = seenCount >= total && total > 0;
+
+  // Nearest villa street name + distance from start
+  const villaInfo = useMemo(() => {
+    if (!current) return null;
+    let best: VillaStreet | null = null;
+    let bestDist = Infinity;
+    for (const v of villaStreets) {
+      const d = distM(current.lat, current.lng, v.lat, v.lng);
+      if (d < bestDist) { bestDist = d; best = v; }
+    }
+    if (!best || bestDist > 500) return null;
+    const fromStart = distM(current.lat, current.lng, START_LAT, START_LNG);
+    return { name: best.name, distFromStart: Math.round(fromStart) };
+  }, [current, villaStreets]);
 
   // Init map
   useEffect(() => {
@@ -121,6 +152,15 @@ export default function HojreTrainer({ junctions, onBack }: Props) {
       const sv = map.getStreetView();
       sv.addListener("visible_changed", () => setStreetViewActive(sv.getVisible()));
 
+      // Start marker (køreprøve sted)
+      startMarkerRef.current = new google.maps.marker.AdvancedMarkerElement({
+        map,
+        position: { lat: START_LAT, lng: START_LNG },
+        content: createStartMarker(),
+        title: "Vindblæs Alle 2 (start)",
+        zIndex: 50,
+      });
+
       // Show all junctions as small gray markers
       for (const j of junctions) {
         const el = createHMarker(18, false);
@@ -137,6 +177,7 @@ export default function HojreTrainer({ junctions, onBack }: Props) {
     return () => {
       allMarkersRef.current.forEach((m) => (m.map = null));
       markerRef.current && (markerRef.current.map = null);
+      startMarkerRef.current && (startMarkerRef.current.map = null);
     };
   }, []);
 
@@ -285,9 +326,16 @@ export default function HojreTrainer({ junctions, onBack }: Props) {
             </span>
           </div>
           {!allDone && (
-            <p className="text-[10px] text-slate-500 mt-1 text-center">
-              #{currentIdx + 1} — {seen.has(current?.id) ? "allerede set" : "ny"}
-            </p>
+            <div className="mt-1 text-center">
+              <p className="text-[10px] text-slate-500">
+                #{currentIdx + 1} — {seen.has(current?.id) ? "allerede set" : "ny"}
+              </p>
+              {villaInfo && (
+                <p className="text-xs text-amber-400 font-medium mt-0.5">
+                  {villaInfo.name} — {villaInfo.distFromStart < 1000 ? `${villaInfo.distFromStart}m` : `${(villaInfo.distFromStart / 1000).toFixed(1)}km`} fra start
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>

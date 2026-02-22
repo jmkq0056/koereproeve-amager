@@ -136,7 +136,7 @@ function App() {
 
   if (screen === "trainer") {
     const hojreOnly = intersections.filter((i) => i.type === "hojre_vigepligt");
-    return <HojreTrainer junctions={hojreOnly} onBack={handleBackToHome} />;
+    return <HojreTrainer junctions={hojreOnly} villaStreets={villaStreets} onBack={handleBackToHome} />;
   }
 
   if (screen === "map" && activeRoute) {
