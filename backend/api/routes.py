@@ -173,11 +173,10 @@ async def generate_route(
         "units": "METRIC",
     }
 
-    # Only set routeModifiers when we need to AVOID highways.
-    # When including motorway, omit routeModifiers entirely so the via
-    # waypoints on the E20 are the only routing constraint.
-    if not include_motorway:
-        body["routeModifiers"] = {"avoidHighways": True}
+    # Always avoid highways globally. The via waypoints on E20 still
+    # force the route through the motorway, but after exiting Google
+    # uses surface roads instead of hopping back onto E20.
+    body["routeModifiers"] = {"avoidHighways": True}
 
     headers = {
         "Content-Type": "application/json",

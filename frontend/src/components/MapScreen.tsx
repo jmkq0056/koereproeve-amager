@@ -315,6 +315,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
   const [streetViewActive, setStreetViewActive] = useState(false);
 
   const [mapReady, setMapReady] = useState(false);
+  const [signsHidden, setSignsHidden] = useState(false);
   const [mode, setMode] = useState<"overview" | "step">("overview");
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<Step[]>([]);
@@ -466,6 +467,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
     if (!mapReady || !mapInstance.current) return;
     markersRef.current.forEach((m) => (m.map = null));
     markersRef.current = [];
+    if (signsHidden) return;
 
     intersections.forEach((inter) => {
       const fk = inter.type as keyof MarkerFilter;
@@ -490,14 +492,14 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
       });
       markersRef.current.push(marker);
     });
-  }, [mapReady, intersections, filters]);
+  }, [mapReady, intersections, filters, signsHidden]);
 
   // Speed signs — mapReady ensures this runs after async map init
   useEffect(() => {
     if (!mapReady || !mapInstance.current) return;
     speedMarkersRef.current.forEach((m) => (m.map = null));
     speedMarkersRef.current = [];
-    if (!filters.speed_limits) return;
+    if (!filters.speed_limits || signsHidden) return;
 
     const rPts = routePointsRef.current;
 
@@ -556,7 +558,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
         speedMarkersRef.current.push(marker);
       });
     }
-  }, [mapReady, roads, googleSpeeds, filters.speed_limits]);
+  }, [mapReady, roads, googleSpeeds, filters.speed_limits, signsHidden]);
 
   const resetView = useCallback(() => {
     if (mapInstance.current && boundsRef.current) mapInstance.current.fitBounds(boundsRef.current, 60);
@@ -1038,6 +1040,10 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
             <button onClick={() => setPanel(panel === "filters" ? "none" : "filters")} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs transition-colors ${panel === "filters" ? "text-blue-500 bg-blue-50" : "text-slate-500"}`}>
               <IconFilter />
               <span>Filter</span>
+            </button>
+            <button onClick={() => setSignsHidden(!signsHidden)} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs transition-colors ${signsHidden ? "text-orange-500 bg-orange-50" : "text-slate-500"}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="2" fill="none"/>{signsHidden && <line x1="4" y1="4" x2="16" y2="16" stroke="currentColor" strokeWidth="2"/>}<text x="10" y="14" textAnchor="middle" fontSize="10" fill="currentColor" fontWeight="bold">S</text></svg>
+              <span>{signsHidden ? "Vis" : "Skjul"}</span>
             </button>
             <button onClick={startSvDrive} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-slate-500 transition-colors">
               <IconCar />
