@@ -297,6 +297,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
   const [saved, setSaved] = useState(false);
   const [streetViewActive, setStreetViewActive] = useState(false);
 
+  const [mapReady, setMapReady] = useState(false);
   const [mode, setMode] = useState<"overview" | "step">("overview");
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<Step[]>([]);
@@ -381,6 +382,8 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
       // Street view visible listener
       const sv = map.getStreetView();
       sv.addListener("visible_changed", () => setStreetViewActive(sv.getVisible()));
+
+      setMapReady(true);
     };
     init();
     return () => {
@@ -427,9 +430,9 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
     }
   }, [mode, currentStep, steps]);
 
-  // Intersection markers
+  // Intersection markers — mapReady ensures this runs after async map init
   useEffect(() => {
-    if (!mapInstance.current) return;
+    if (!mapReady || !mapInstance.current) return;
     markersRef.current.forEach((m) => (m.map = null));
     markersRef.current = [];
 
@@ -455,11 +458,11 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
       });
       markersRef.current.push(marker);
     });
-  }, [intersections, filters]);
+  }, [mapReady, intersections, filters]);
 
-  // Speed signs — prefer Google speed data, fallback to OSM
+  // Speed signs — mapReady ensures this runs after async map init
   useEffect(() => {
-    if (!mapInstance.current) return;
+    if (!mapReady || !mapInstance.current) return;
     speedMarkersRef.current.forEach((m) => (m.map = null));
     speedMarkersRef.current = [];
     if (!filters.speed_limits) return;
@@ -467,11 +470,11 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
     const rPts = routePointsRef.current;
 
     if (googleSpeeds.length > 0) {
-      // Use Google speed limit points near route
+      // Use merged HERE + OSM speed limit points near route
       const shown = new Set<string>();
       googleSpeeds.forEach((gs) => {
         if (!gs.lat || !gs.lng || !gs.speedLimit) return;
-        if (!nearRoute(gs.lat, gs.lng, rPts, 150)) return;
+        if (!nearRoute(gs.lat, gs.lng, rPts, 200)) return;
         // Deduplicate by grid cell (~100m)
         const gridKey = `${Math.round(gs.lat * 1000)}_${Math.round(gs.lng * 1000)}`;
         if (shown.has(gridKey)) return;
@@ -486,7 +489,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
         });
         marker.addListener("click", () => {
           infoWindowRef.current?.setContent(
-            `<div style="font:13px system-ui;padding:4px"><strong>${gs.speedLimit} km/t</strong><br/><span style="color:#888">Google Roads API</span></div>`
+            `<div style="font:13px system-ui;padding:4px"><strong>${gs.speedLimit} km/t</strong></div>`
           );
           infoWindowRef.current?.open(mapInstance.current!, marker);
         });
@@ -497,7 +500,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
       roads.forEach((road) => {
         if (road.geometry.length < 2) return;
         if (SKIP_ROAD_TYPES.has(road.highway_type)) return;
-        const isNear = road.geometry.some((g) => nearRoute(g.lat, g.lng, rPts, 150));
+        const isNear = road.geometry.some((g) => nearRoute(g.lat, g.lng, rPts, 200));
         if (!isNear) return;
 
         const midIdx = Math.floor(road.geometry.length / 2);
@@ -519,7 +522,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
         speedMarkersRef.current.push(marker);
       });
     }
-  }, [roads, googleSpeeds, filters.speed_limits]);
+  }, [mapReady, roads, googleSpeeds, filters.speed_limits]);
 
   const resetView = useCallback(() => {
     if (mapInstance.current && boundsRef.current) mapInstance.current.fitBounds(boundsRef.current, 60);
