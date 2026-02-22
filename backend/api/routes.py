@@ -14,13 +14,20 @@ START_ADDRESS = "Vindblæs Alle 2, 2770 Kastrup, Denmark"
 START_LAT = 55.634464
 START_LNG = 12.650135
 
-TAARNBY_RUNDKOERSEL = {"lat": 55.6180, "lng": 12.6050}
-# E20 motorway waypoints — exact OSM node coordinates
-# Route: Start(Kastrup) → villa → E20 east → westbound through tunnel → Tårnby → villa → Start
-# Entry near Kastrup (OSM node 118900, non-toll section)
-MOTORWAY_EAST = {"lat": 55.6302, "lng": 12.6351}
-# Tårnby tunnel midpoint — ONLY motorway here, no parallel surface roads
-MOTORWAY_TUNNEL = {"lat": 55.6294, "lng": 12.6046}
+# E20 motorway waypoints — real driving test checkpoints
+# Always exit at the same west off-ramp
+MOTORWAY_EXIT = {"lat": 55.629318, "lng": 12.603788}
+# Two route variations (east → west along E20)
+MOTORWAY_ROUTE_A = [
+    {"lat": 55.633517, "lng": 12.656518},   # entry east
+    {"lat": 55.630170, "lng": 12.641366},   # mid checkpoint
+    MOTORWAY_EXIT,                            # exit west
+]
+MOTORWAY_ROUTE_B = [
+    {"lat": 55.630433, "lng": 12.655834},   # entry east
+    {"lat": 55.630201, "lng": 12.628568},   # mid checkpoint
+    MOTORWAY_EXIT,                            # exit west
+]
 
 ROUTES_API_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 
@@ -123,13 +130,13 @@ async def generate_route(
     Target: 25-35 min round trip.
     """
     if include_motorway:
-        # villa → through E20 tunnel (only motorway there) → villa → back
-        # Single tunnel via point keeps the route short (~25-35 min)
+        # villa → E20 (east→west) → villa → back
+        # Randomly pick one of two real driving test motorway routes
         pre = await pick_spread_waypoints(1)
         post = await pick_spread_waypoints(1)
         villa_wps = pre + post
-        motorway_wps = [MOTORWAY_TUNNEL]
-        waypoints = pre + [MOTORWAY_TUNNEL] + post
+        motorway_wps = random.choice([MOTORWAY_ROUTE_A, MOTORWAY_ROUTE_B])
+        waypoints = pre + motorway_wps + post
     else:
         # 3 random villa waypoints creating a residential loop
         villa_wps = await pick_spread_waypoints(3)
@@ -215,15 +222,14 @@ async def generate_route(
             "within_target": 25 <= duration_minutes <= 40,
         })
 
-    # Diagnostic: verify the polyline actually passes near the motorway tunnel
+    # Diagnostic: verify the polyline actually passes near the motorway exit
     if include_motorway and routes:
         poly = routes[0].get("polyline", "")
         if poly:
-            near_tunnel = polyline_passes_near(poly, MOTORWAY_TUNNEL["lat"], MOTORWAY_TUNNEL["lng"], 500)
-            near_east = polyline_passes_near(poly, MOTORWAY_EAST["lat"], MOTORWAY_EAST["lng"], 500)
-            logger.info("Motorway check: near_tunnel=%s near_east=%s", near_tunnel, near_east)
-            if not near_tunnel and not near_east:
-                logger.warning("Route polyline does NOT pass near motorway waypoints!")
+            near_exit = polyline_passes_near(poly, MOTORWAY_EXIT["lat"], MOTORWAY_EXIT["lng"], 500)
+            logger.info("Motorway check: near_exit=%s", near_exit)
+            if not near_exit:
+                logger.warning("Route polyline does NOT pass near motorway exit!")
 
     # Save to MongoDB
     if routes:
