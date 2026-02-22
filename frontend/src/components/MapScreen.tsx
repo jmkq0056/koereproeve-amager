@@ -275,6 +275,21 @@ function createZoneSign(speed: number): HTMLDivElement {
   return el;
 }
 
+function scaleForZoom(zoom: number): number {
+  if (zoom >= 17) return 1;
+  if (zoom >= 16) return 0.75;
+  if (zoom >= 15) return 0.55;
+  return 0.4;
+}
+
+function wrapScalable(inner: HTMLDivElement, zoom: number): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "marker-scale";
+  el.style.cssText = `transform-origin:center;transform:scale(${scaleForZoom(zoom)});transition:transform 0.15s;`;
+  el.appendChild(inner);
+  return el;
+}
+
 const START_LAT = 55.634464;
 const START_LNG = 12.650135;
 
@@ -290,6 +305,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
   const routePointsRef = useRef<{ lat: number; lng: number }[]>([]);
   const startMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const svServiceRef = useRef<google.maps.StreetViewService | null>(null);
+  const zoomRef = useRef(14);
 
   const [mapType, setMapType] = useState<"roadmap" | "hybrid">("hybrid");
   const [panel, setPanel] = useState<"none" | "filters" | "villas">("none");
@@ -379,6 +395,17 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
         infoWindowRef.current?.open(map, startMarkerRef.current!);
       });
 
+      // Scale markers on zoom change
+      map.addListener("zoom_changed", () => {
+        const z = map.getZoom() || 14;
+        zoomRef.current = z;
+        const s = scaleForZoom(z);
+        [...markersRef.current, ...speedMarkersRef.current].forEach((m) => {
+          const el = m.content as HTMLElement;
+          if (el?.classList.contains("marker-scale")) el.style.transform = `scale(${s})`;
+        });
+      });
+
       // Street view visible listener
       const sv = map.getStreetView();
       sv.addListener("visible_changed", () => setStreetViewActive(sv.getVisible()));
@@ -444,10 +471,11 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
       const label = TYPE_LABELS[inter.type] || inter.type;
 
       const pin = createIntersectionMarker(inter.type);
+      const wrapped = wrapScalable(pin, zoomRef.current);
       const marker = new google.maps.marker.AdvancedMarkerElement({
         map: mapInstance.current!,
         position: { lat: inter.lat, lng: inter.lng },
-        content: pin,
+        content: wrapped,
         title: label,
       });
       marker.addListener("click", () => {
@@ -481,10 +509,11 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
         shown.add(gridKey);
 
         const sign = createSpeedSign(gs.speedLimit);
+        const wrapped = wrapScalable(sign, zoomRef.current);
         const marker = new google.maps.marker.AdvancedMarkerElement({
           map: mapInstance.current!,
           position: { lat: gs.lat, lng: gs.lng },
-          content: sign,
+          content: wrapped,
           title: `${gs.speedLimit} km/t`,
         });
         marker.addListener("click", () => {
@@ -507,10 +536,11 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
         const midPt = road.geometry[midIdx];
         const speedNum = parseInt(road.maxspeed) || 50;
         const sign = createSpeedSign(speedNum);
+        const wrapped = wrapScalable(sign, zoomRef.current);
         const marker = new google.maps.marker.AdvancedMarkerElement({
           map: mapInstance.current!,
           position: { lat: midPt.lat, lng: midPt.lng },
-          content: sign,
+          content: wrapped,
           title: `${road.name} -- ${road.maxspeed} km/t`,
         });
         marker.addListener("click", () => {
