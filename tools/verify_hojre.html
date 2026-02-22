@@ -75,6 +75,7 @@ const STORAGE_KEY = 'hojre_verify_state';
 let points = [];
 let currentIndex = 0;
 let decisions = {};
+let history = []; // stack of osm_ids in order of decisions
 let map = null;
 let marker = null;
 let isDone = false;
@@ -85,12 +86,13 @@ function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     decisions = saved.decisions || {};
+    history = saved.history || Object.keys(decisions).map(Number);
     currentIndex = saved.currentIndex || 0;
   } catch(e) {}
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ decisions, currentIndex }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ decisions, history, currentIndex }));
 }
 
 function updateStats() {
@@ -168,14 +170,18 @@ function showPoint(index) {
           <div class="coords" id="coordsLabel"></div>
           <div class="way-count" id="wayLabel"></div>
         </div>
-        <div class="buttons">
+        <div class="buttons" style="margin-bottom:8px;">
+          <button class="btn btn-skip" id="btnBack" onclick="goBack()" style="flex:0.5;font-size:13px;">&#9664; Back</button>
           <button class="btn btn-no" id="btnNo" onclick="decide('remove')">NO - False</button>
           <button class="btn btn-sv" id="btnSV" onclick="toggleStreetView()">SV</button>
-          <button class="btn btn-skip" id="btnSkip" onclick="skip()">Skip</button>
           <button class="btn btn-yes" id="btnYes" onclick="decide('keep')">YES - Real</button>
+          <button class="btn btn-skip" id="btnSkip" onclick="skip()" style="flex:0.5;font-size:13px;">Skip &#9654;</button>
         </div>
-        <button class="btn btn-save" id="btnPartialSave" onclick="submitDeletions()" style="margin-top:8px;font-size:13px;padding:10px;">Delete <span id="removeCount">0</span> false positives now</button>
-        <div class="keyboard-hint">A = No | W = Street View | S = Skip | D = Yes | Z = Undo | Q = Delete now</div>
+        <div class="buttons">
+          <button class="btn btn-save" id="btnPartialSave" onclick="submitDeletions()" style="font-size:13px;padding:10px;flex:1;">Delete <span id="removeCount">0</span> false positives now</button>
+          <button class="btn btn-skip" onclick="resetAll()" style="flex:0.4;font-size:12px;padding:10px;background:#7f1d1d;color:#fca5a5;">Reset</button>
+        </div>
+        <div class="keyboard-hint">A = No | D = Yes | S = Skip | W = Street View | Z = Back | Q = Delete now | R = Reset</div>
       </div>
     `;
     map = new google.maps.Map(document.getElementById('map'), {
@@ -243,6 +249,7 @@ function decide(decision) {
   if (isDone) return;
   const pt = points[currentIndex];
   decisions[pt.osm_id] = decision;
+  history.push(pt.osm_id);
   saveState();
 
   const next = findNextUnreviewed(currentIndex + 1);
@@ -258,10 +265,10 @@ function skip() {
   showPoint(next);
 }
 
-function undoLast() {
-  const decided = Object.keys(decisions);
-  if (decided.length === 0) return;
-  const lastOsmId = parseInt(decided[decided.length - 1]);
+function goBack() {
+  if (history.length === 0) return;
+  // Undo last decision and go back to that point
+  const lastOsmId = history.pop();
   delete decisions[lastOsmId];
   saveState();
   const idx = points.findIndex(p => p.osm_id === lastOsmId);
@@ -283,7 +290,8 @@ function showDone() {
       <h2>All reviewed!</h2>
       <p>Kept: ${kept} | Removing: ${removed}</p>
       <button class="btn btn-save" id="btnSave" onclick="submitDeletions()">Delete ${removed} false positives from database</button>
-      <button class="btn btn-skip" style="width:100%" onclick="resetAll()">Reset and start over</button>
+      <button class="btn btn-skip" style="width:100%;margin-top:8px" onclick="goBack()">&#9664; Go back to last</button>
+      <button class="btn btn-skip" style="width:100%;margin-top:8px;background:#7f1d1d;color:#fca5a5;" onclick="resetAll()">Reset and start over</button>
       <p style="font-size:12px;color:#475569">IDs to remove: ${removeIds.length}</p>
     </div>
   `;
@@ -345,12 +353,13 @@ function resetAll() {
 }
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') { if (confirm('Reset all decisions?')) resetAll(); return; }
   if (isDone) return;
   if (e.key === 'a' || e.key === 'A') decide('remove');
   else if (e.key === 'd' || e.key === 'D') decide('keep');
   else if (e.key === 's' || e.key === 'S') skip();
   else if (e.key === 'w' || e.key === 'W') toggleStreetView();
-  else if (e.key === 'z' || e.key === 'Z') undoLast();
+  else if (e.key === 'z' || e.key === 'Z') goBack();
   else if (e.key === 'q' || e.key === 'Q') submitDeletions();
 });
 

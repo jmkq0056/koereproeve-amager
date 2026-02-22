@@ -453,7 +453,7 @@ async def seed_villa_streets():
     print(f"  Stored {len(streets)} unique villa streets")
 
 
-async def main(only_here: bool = False):
+async def main(only_here: bool = False, only_hojre: bool = False):
     print("=" * 50)
     print("SEEDING KØREPRØVE AMAGER DATABASE")
     print(f"Center: {START_LAT}, {START_LNG}")
@@ -461,10 +461,15 @@ async def main(only_here: bool = False):
     print(f"DB: {settings.DB_NAME}")
     if only_here:
         print("MODE: HERE speed limits ONLY")
+    elif only_hojre:
+        print("MODE: Højre vigepligt ONLY")
     print("=" * 50)
 
     if only_here:
         await seed_here_speed_limits()
+    elif only_hojre:
+        signed_ids = await seed_signed_intersections()
+        await seed_hojre_vigepligt(signed_ids)
     else:
         # Run all in parallel — each hits a different mirror/API endpoint
         speed_task = asyncio.create_task(seed_speed_limits())
@@ -488,4 +493,5 @@ async def main(only_here: bool = False):
 if __name__ == "__main__":
     import sys
     only_here = "--here" in sys.argv
-    asyncio.run(main(only_here=only_here))
+    only_hojre = "--hojre" in sys.argv
+    asyncio.run(main(only_here=only_here, only_hojre=only_hojre))
