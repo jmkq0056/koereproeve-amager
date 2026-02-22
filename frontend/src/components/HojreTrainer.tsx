@@ -116,10 +116,13 @@ export default function HojreTrainer({ junctions, villaStreets, onBack }: Props)
   const mapInstance = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const startMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
-  const allMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const allMarkersRef = useRef<Map<number, google.maps.marker.AdvancedMarkerElement>>(new Map());
   const svServiceRef = useRef<google.maps.StreetViewService | null>(null);
-  const routeLineRef = useRef<google.maps.Polyline | null>(null);
+  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const routeCacheRef = useRef<Map<number, google.maps.DirectionsResult>>(new Map());
+  const hiddenGrayRef = useRef<number | null>(null);
 
+  const [mapReady, setMapReady] = useState(false);
   const [seen, setSeen] = useState<Set<number>>(loadSeen);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [streetViewActive, setStreetViewActive] = useState(false);
@@ -196,21 +199,35 @@ export default function HojreTrainer({ junctions, villaStreets, onBack }: Props)
           content: el,
           zIndex: 1,
         });
-        allMarkersRef.current.push(m);
+        allMarkersRef.current.set(j.id, m);
       }
+
+      setMapReady(true);
     };
     init();
     return () => {
       allMarkersRef.current.forEach((m) => (m.map = null));
       markerRef.current && (markerRef.current.map = null);
       startMarkerRef.current && (startMarkerRef.current.map = null);
-      routeLineRef.current?.setMap(null);
+      directionsRendererRef.current?.setMap(null);
     };
   }, []);
 
-  // Update active marker + route line when currentIdx changes
+  // Update active marker + driving route when currentIdx changes or map becomes ready
   useEffect(() => {
-    if (!mapInstance.current || !current) return;
+    if (!mapReady || !mapInstance.current || !current) return;
+    const map = mapInstance.current;
+
+    // Restore previously hidden gray marker
+    if (hiddenGrayRef.current !== null) {
+      const prev = allMarkersRef.current.get(hiddenGrayRef.current);
+      if (prev) prev.map = map;
+    }
+
+    // Hide gray marker at current junction so active diamond is clean
+    const gray = allMarkersRef.current.get(current.id);
+    if (gray) gray.map = null;
+    hiddenGrayRef.current = current.id;
 
     // Remove old active marker
     if (markerRef.current) markerRef.current.map = null;
@@ -218,34 +235,50 @@ export default function HojreTrainer({ junctions, villaStreets, onBack }: Props)
     // Create big active marker (pulsing diamond)
     const el = createHMarker(44, true);
     markerRef.current = new google.maps.marker.AdvancedMarkerElement({
-      map: mapInstance.current,
+      map,
       position: { lat: current.lat, lng: current.lng },
       content: el,
       zIndex: 100,
     });
 
-    // Draw dashed line from start to current junction
-    routeLineRef.current?.setMap(null);
-    routeLineRef.current = new google.maps.Polyline({
-      path: [
-        { lat: START_LAT, lng: START_LNG },
-        { lat: current.lat, lng: current.lng },
-      ],
-      strokeColor: "#ef4444",
-      strokeOpacity: 0,
-      strokeWeight: 3,
-      icons: [{
-        icon: { path: "M 0,-1 0,1", strokeOpacity: 0.6, strokeWeight: 3, scale: 3 },
-        offset: "0",
-        repeat: "16px",
-      }],
-      map: mapInstance.current,
+    // Draw actual driving route from start to current junction
+    directionsRendererRef.current?.setMap(null);
+    const renderer = new google.maps.DirectionsRenderer({
+      map,
+      suppressMarkers: true,
+      polylineOptions: {
+        strokeColor: "#ef4444",
+        strokeOpacity: 0.6,
+        strokeWeight: 5,
+      },
     });
+    directionsRendererRef.current = renderer;
 
-    // Pan to it
-    mapInstance.current.panTo({ lat: current.lat, lng: current.lng });
-    mapInstance.current.setZoom(18);
-  }, [currentIdx, current]);
+    const cached = routeCacheRef.current.get(current.id);
+    if (cached) {
+      renderer.setDirections(cached);
+    } else {
+      new google.maps.DirectionsService().route(
+        {
+          origin: { lat: START_LAT, lng: START_LNG },
+          destination: { lat: current.lat, lng: current.lng },
+          travelMode: google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+          if (status === google.maps.DirectionsStatus.OK && result) {
+            routeCacheRef.current.set(current.id, result);
+            renderer.setDirections(result);
+          }
+        }
+      );
+    }
+
+    // Pan to junction, zoom to show both start and junction
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend({ lat: START_LAT, lng: START_LNG });
+    bounds.extend({ lat: current.lat, lng: current.lng });
+    map.fitBounds(bounds, { top: 80, bottom: 100, left: 40, right: 40 });
+  }, [mapReady, currentIdx, current]);
 
   const markSeen = useCallback(() => {
     if (!current) return;
