@@ -72,9 +72,34 @@ const IconRefresh = () => (
 );
 
 function createHMarker(size: number, active: boolean): HTMLDivElement {
+  if (active) {
+    // Big pulsing diamond marker for active junction
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText = `position:relative;width:${size + 20}px;height:${size + 20}px;display:flex;align-items:center;justify-content:center;`;
+    // Pulse ring
+    const pulse = document.createElement("div");
+    pulse.style.cssText = `position:absolute;width:${size + 16}px;height:${size + 16}px;border-radius:50%;background:rgba(239,68,68,0.3);animation:hpulse 1.5s ease-in-out infinite;`;
+    // Inner diamond
+    const diamond = document.createElement("div");
+    diamond.style.cssText = `width:${size}px;height:${size}px;background:#dc2626;transform:rotate(45deg);border:4px solid white;box-shadow:0 0 20px rgba(239,68,68,0.8),0 4px 12px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10;position:relative;`;
+    const letter = document.createElement("span");
+    letter.style.cssText = `transform:rotate(-45deg);font-weight:900;font-size:${Math.round(size * 0.4)}px;color:white;font-family:system-ui;`;
+    letter.textContent = "H";
+    diamond.appendChild(letter);
+    wrapper.appendChild(pulse);
+    wrapper.appendChild(diamond);
+    // Inject pulse animation
+    if (!document.getElementById("hpulse-style")) {
+      const style = document.createElement("style");
+      style.id = "hpulse-style";
+      style.textContent = `@keyframes hpulse{0%,100%{transform:scale(1);opacity:0.4}50%{transform:scale(1.6);opacity:0}}`;
+      document.head.appendChild(style);
+    }
+    return wrapper;
+  }
+  // Small gray circle for inactive
   const el = document.createElement("div");
-  el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${active ? "#ef4444" : "#9ca3af"};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:${Math.round(size * 0.45)}px;color:white;font-family:system-ui;transition:transform 0.2s;`;
-  if (active) el.style.transform = "scale(1.2)";
+  el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:#6b7280;border:2px solid rgba(255,255,255,0.5);box-shadow:0 1px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:${Math.round(size * 0.45)}px;color:white;font-family:system-ui;opacity:0.6;`;
   el.textContent = "H";
   return el;
 }
@@ -93,6 +118,7 @@ export default function HojreTrainer({ junctions, villaStreets, onBack }: Props)
   const startMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const allMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const svServiceRef = useRef<google.maps.StreetViewService | null>(null);
+  const routeLineRef = useRef<google.maps.Polyline | null>(null);
 
   const [seen, setSeen] = useState<Set<number>>(loadSeen);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -178,23 +204,42 @@ export default function HojreTrainer({ junctions, villaStreets, onBack }: Props)
       allMarkersRef.current.forEach((m) => (m.map = null));
       markerRef.current && (markerRef.current.map = null);
       startMarkerRef.current && (startMarkerRef.current.map = null);
+      routeLineRef.current?.setMap(null);
     };
   }, []);
 
-  // Update active marker when currentIdx changes
+  // Update active marker + route line when currentIdx changes
   useEffect(() => {
     if (!mapInstance.current || !current) return;
 
     // Remove old active marker
     if (markerRef.current) markerRef.current.map = null;
 
-    // Create big active marker
-    const el = createHMarker(36, true);
+    // Create big active marker (pulsing diamond)
+    const el = createHMarker(44, true);
     markerRef.current = new google.maps.marker.AdvancedMarkerElement({
       map: mapInstance.current,
       position: { lat: current.lat, lng: current.lng },
       content: el,
       zIndex: 100,
+    });
+
+    // Draw dashed line from start to current junction
+    routeLineRef.current?.setMap(null);
+    routeLineRef.current = new google.maps.Polyline({
+      path: [
+        { lat: START_LAT, lng: START_LNG },
+        { lat: current.lat, lng: current.lng },
+      ],
+      strokeColor: "#ef4444",
+      strokeOpacity: 0,
+      strokeWeight: 3,
+      icons: [{
+        icon: { path: "M 0,-1 0,1", strokeOpacity: 0.6, strokeWeight: 3, scale: 3 },
+        offset: "0",
+        repeat: "16px",
+      }],
+      map: mapInstance.current,
     });
 
     // Pan to it
