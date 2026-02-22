@@ -287,97 +287,127 @@ async def seed_hojre_vigepligt(signed_ids: set):
     print(f"  Skip reasons: {dict(skip_reasons)}")
 
 
-async def seed_google_speed_limits():
+def decode_here_polyline(encoded: str) -> list[tuple[float, float]]:
+    """Decode HERE flexible polyline format."""
+    # HERE uses a custom flexible polyline encoding
+    # pip install flexpolyline handles it, but let's inline a simple decoder
+    import flexpolyline
+    return [(lat, lng) for lat, lng, *_ in flexpolyline.decode(encoded)]
+
+
+async def seed_here_speed_limits():
     """
-    One-time seed: query Google Roads API speedLimits across Amager grid.
-    Generates ~100m-spaced points within the radius, batches them (100 per request),
-    and stores results in google_speed_limits collection.
+    One-time seed: use HERE Routing API to get speed limits across the Amager area.
+    Creates routes between grid edge points through the area, collects speed limit spans.
+    Stores in google_speed_limits collection (same schema for frontend compat).
     """
-    print("\n=== GOOGLE SPEED LIMITS (one-time seed) ===")
+    print("\n=== HERE SPEED LIMITS (one-time seed) ===")
     import math
 
-    # Generate grid of points across the area (~100m spacing)
-    step_deg = 0.001  # ~111m latitude, ~60m longitude at this lat
-    points = []
-    lat_range = RADIUS / 111000  # Convert meters to degrees
-    lng_range = RADIUS / (111000 * math.cos(math.radians(START_LAT)))
+    here_key = settings.HERE_API_KEY
+    if not here_key:
+        print("  SKIPPED — no HERE_API_KEY in .env")
+        return
 
-    lat = START_LAT - lat_range
-    while lat <= START_LAT + lat_range:
-        lng = START_LNG - lng_range
-        while lng <= START_LNG + lng_range:
-            # Check within circle
-            dlat = (lat - START_LAT) * 111000
-            dlng = (lng - START_LNG) * 111000 * math.cos(math.radians(START_LAT))
-            if math.sqrt(dlat**2 + dlng**2) <= RADIUS:
-                points.append((round(lat, 6), round(lng, 6)))
-            lng += step_deg
-        lat += step_deg
+    # Generate edge points around the circle for route pairs
+    # Routes from various directions through the area capture all road speeds
+    edge_points = []
+    for angle_deg in range(0, 360, 30):  # 12 directions
+        angle = math.radians(angle_deg)
+        dlat = (RADIUS / 111000) * math.cos(angle)
+        dlng = (RADIUS / (111000 * math.cos(math.radians(START_LAT)))) * math.sin(angle)
+        edge_points.append((round(START_LAT + dlat, 6), round(START_LNG + dlng, 6)))
 
-    print(f"  Generated {len(points)} grid points")
+    # Also add the center
+    center = (START_LAT, START_LNG)
 
-    # Batch into groups of 100 (API limit)
-    batch_size = 100
-    batches = [points[i:i+batch_size] for i in range(0, len(points), batch_size)]
-    print(f"  {len(batches)} batches to process")
+    # Create route pairs: center↔edge and cross-area
+    route_pairs = []
+    for ep in edge_points:
+        route_pairs.append((center, ep))
+        route_pairs.append((ep, center))
+    # Cross-area: opposite edges
+    for i in range(len(edge_points) // 2):
+        j = i + len(edge_points) // 2
+        route_pairs.append((edge_points[i], edge_points[j]))
 
-    all_speed_limits = []
-    for batch_idx, batch in enumerate(batches):
-        path_str = "|".join(f"{lat},{lng}" for lat, lng in batch)
-        url = f"https://roads.googleapis.com/v1/speedLimits?path={path_str}&key={settings.G_API_KEY}"
+    print(f"  {len(route_pairs)} route pairs to query")
+
+    all_points = []  # (lat, lng, speed_kmh)
+
+    for idx, (origin, dest) in enumerate(route_pairs):
+        url = (
+            f"https://router.hereapi.com/v8/routes"
+            f"?transportMode=car"
+            f"&origin={origin[0]},{origin[1]}"
+            f"&destination={dest[0]},{dest[1]}"
+            f"&return=polyline,summary&spans=speedLimit"
+            f"&apikey={here_key}"
+        )
 
         try:
             async with httpx.AsyncClient(timeout=30) as c:
                 resp = await c.get(url)
                 if resp.status_code == 200:
                     data = resp.json()
-                    speed_limits = data.get("speedLimits", [])
-                    snapped_points = data.get("snappedPoints", [])
+                    for route in data.get("routes", []):
+                        for section in route.get("sections", []):
+                            polyline_str = section.get("polyline", "")
+                            spans = section.get("spans", [])
+                            if not polyline_str or not spans:
+                                continue
 
-                    # Build placeId -> snapped location mapping
-                    place_locs = {}
-                    for sp in snapped_points:
-                        loc = sp.get("location", {})
-                        pid = sp.get("placeId", "")
-                        if pid and loc:
-                            place_locs[pid] = {"lat": loc.get("latitude", 0), "lng": loc.get("longitude", 0)}
+                            try:
+                                coords = decode_here_polyline(polyline_str)
+                            except Exception:
+                                continue
 
-                    for sl in speed_limits:
-                        pid = sl.get("placeId", "")
-                        loc = place_locs.get(pid, {})
-                        all_speed_limits.append({
-                            "placeId": pid,
-                            "speedLimit": sl.get("speedLimit", 0),
-                            "units": sl.get("units", "KPH"),
-                            "lat": loc.get("lat", 0),
-                            "lng": loc.get("lng", 0),
-                        })
-                    print(f"  Batch {batch_idx+1}/{len(batches)}: {len(speed_limits)} speed limits")
+                            # Each span has offset (index into polyline) and speedLimit (m/s)
+                            for si, span in enumerate(spans):
+                                offset = span.get("offset", 0)
+                                speed_ms = span.get("speedLimit", 0)
+                                if not speed_ms or speed_ms <= 0:
+                                    continue
+                                speed_kmh = round(speed_ms * 3.6)
+
+                                # Get coords at offset
+                                if offset < len(coords):
+                                    lat, lng = coords[offset]
+                                    all_points.append((lat, lng, speed_kmh))
+
+                                    # Also sample midpoint to next span for coverage
+                                    next_offset = spans[si + 1]["offset"] if si + 1 < len(spans) else len(coords) - 1
+                                    mid = (offset + next_offset) // 2
+                                    if mid < len(coords) and mid != offset:
+                                        mlat, mlng = coords[mid]
+                                        all_points.append((mlat, mlng, speed_kmh))
+
+                    print(f"  Route {idx+1}/{len(route_pairs)}: OK ({len(all_points)} total points)")
                 elif resp.status_code == 429:
-                    print(f"  Batch {batch_idx+1}: rate limited, waiting 60s...")
-                    await asyncio.sleep(60)
+                    print(f"  Route {idx+1}: rate limited, waiting 30s...")
+                    await asyncio.sleep(30)
                 else:
-                    print(f"  Batch {batch_idx+1}: status {resp.status_code} - {resp.text[:100]}")
+                    print(f"  Route {idx+1}: status {resp.status_code}")
         except Exception as e:
-            print(f"  Batch {batch_idx+1}: error {type(e).__name__}: {e}")
+            print(f"  Route {idx+1}: error {type(e).__name__}: {e}")
 
-        # Be polite with API
-        if batch_idx < len(batches) - 1:
-            await asyncio.sleep(1)
+        # Rate limit: ~10 req/s for free tier
+        await asyncio.sleep(0.2)
 
-    # Deduplicate by placeId
-    seen = set()
-    unique = []
-    for sl in all_speed_limits:
-        if sl["placeId"] not in seen:
-            seen.add(sl["placeId"])
-            unique.append(sl)
+    # Deduplicate by grid cell (~50m)
+    seen = {}
+    for lat, lng, speed in all_points:
+        key = f"{round(lat * 2000)}_{round(lng * 2000)}"  # ~50m grid
+        if key not in seen:
+            seen[key] = {"lat": round(lat, 6), "lng": round(lng, 6), "speedLimit": speed, "units": "KPH", "placeId": key}
+
+    unique = list(seen.values())
 
     col = db["google_speed_limits"]
     await col.drop()
     if unique:
         await col.insert_many(unique)
-    print(f"  Stored {len(unique)} unique Google speed limit records")
+    print(f"  Stored {len(unique)} unique HERE speed limit records")
 
 
 async def seed_villa_streets():
@@ -423,32 +453,39 @@ async def seed_villa_streets():
     print(f"  Stored {len(streets)} unique villa streets")
 
 
-async def main():
+async def main(only_here: bool = False):
     print("=" * 50)
     print("SEEDING KØREPRØVE AMAGER DATABASE")
     print(f"Center: {START_LAT}, {START_LNG}")
     print(f"Radius: {RADIUS}m")
     print(f"DB: {settings.DB_NAME}")
+    if only_here:
+        print("MODE: HERE speed limits ONLY")
     print("=" * 50)
 
-    # Run all in parallel — each hits a different mirror/API endpoint
-    speed_task = asyncio.create_task(seed_speed_limits())
-    signed_task = asyncio.create_task(seed_signed_intersections())
-    villa_task = asyncio.create_task(seed_villa_streets())
-    google_task = asyncio.create_task(seed_google_speed_limits())
+    if only_here:
+        await seed_here_speed_limits()
+    else:
+        # Run all in parallel — each hits a different mirror/API endpoint
+        speed_task = asyncio.create_task(seed_speed_limits())
+        signed_task = asyncio.create_task(seed_signed_intersections())
+        villa_task = asyncio.create_task(seed_villa_streets())
+        google_task = asyncio.create_task(seed_here_speed_limits())
 
-    # hojre needs signed_ids, so wait for signed first then fire it
-    signed_ids = await signed_task
-    hojre_task = asyncio.create_task(seed_hojre_vigepligt(signed_ids))
+        # hojre needs signed_ids, so wait for signed first then fire it
+        signed_ids = await signed_task
+        hojre_task = asyncio.create_task(seed_hojre_vigepligt(signed_ids))
 
-    await asyncio.gather(speed_task, villa_task, hojre_task, google_task)
+        await asyncio.gather(speed_task, villa_task, hojre_task, google_task)
 
     print("\n" + "=" * 50)
-    print("DONE! All data stored in MongoDB.")
+    print("DONE!")
     print("=" * 50)
 
     client.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+    only_here = "--here" in sys.argv
+    asyncio.run(main(only_here=only_here))

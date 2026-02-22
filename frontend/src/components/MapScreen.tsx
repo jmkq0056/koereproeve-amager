@@ -196,26 +196,79 @@ function createLetterMarker(letter: string, color: string, size: number): HTMLDi
   return el;
 }
 
+function createTrafficLightMarker(): HTMLDivElement {
+  const el = document.createElement("div");
+  el.style.cssText = `width:22px;height:44px;border-radius:6px;background:#1a1a1a;border:2px solid #555;box-shadow:0 2px 8px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:2px 0;`;
+  for (const c of ["#ef4444", "#eab308", "#22c55e"]) {
+    const dot = document.createElement("div");
+    dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:${c};box-shadow:0 0 4px ${c};`;
+    el.appendChild(dot);
+  }
+  return el;
+}
+
+function createStopSignMarker(): HTMLDivElement {
+  const el = document.createElement("div");
+  // Octagon shape via clip-path
+  el.style.cssText = `width:36px;height:36px;background:#dc2626;clip-path:polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);`;
+  const inner = document.createElement("span");
+  inner.style.cssText = `font-size:9px;font-weight:900;color:white;font-family:system-ui;letter-spacing:0.5px;`;
+  inner.textContent = "STOP";
+  el.appendChild(inner);
+  return el;
+}
+
+function createYieldMarker(): HTMLDivElement {
+  // Inverted triangle — ubetinget vigepligt
+  const el = document.createElement("div");
+  el.style.cssText = `width:0;height:0;border-left:18px solid transparent;border-right:18px solid transparent;border-top:32px solid #dc2626;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));position:relative;`;
+  const inner = document.createElement("div");
+  inner.style.cssText = `position:absolute;top:-28px;left:-12px;width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:22px solid white;`;
+  el.appendChild(inner);
+  return el;
+}
+
+function createHojreMarker(): HTMLDivElement {
+  // Yellow diamond — højre vigepligt
+  const el = document.createElement("div");
+  el.style.cssText = `width:32px;height:32px;background:#eab308;transform:rotate(45deg);border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;`;
+  const inner = document.createElement("span");
+  inner.style.cssText = `transform:rotate(-45deg);font-size:13px;font-weight:900;color:white;font-family:system-ui;`;
+  inner.textContent = "H";
+  el.appendChild(inner);
+  return el;
+}
+
+function createIntersectionMarker(type: string): HTMLDivElement {
+  switch (type) {
+    case "trafiklys": return createTrafficLightMarker();
+    case "stopskilt": return createStopSignMarker();
+    case "ubetinget_vigepligt": return createYieldMarker();
+    case "hojre_vigepligt": return createHojreMarker();
+    default: return createLetterMarker("?", "#9ca3af", 30);
+  }
+}
+
 function createSpeedSign(speed: number): HTMLDivElement {
   if (speed <= 40) {
     return createZoneSign(speed);
   }
-  // C55 Regular: red circle border, white bg, black number
+  // C55 Regular: red circle border, white bg, black number — BIG
   const el = document.createElement("div");
-  el.style.cssText = `width:28px;height:28px;border-radius:50%;background:white;border:3px solid #dc2626;box-shadow:0 1px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;color:#111;font-family:system-ui;`;
+  el.style.cssText = `width:38px;height:38px;border-radius:50%;background:white;border:4px solid #dc2626;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;color:#111;font-family:system-ui;`;
   el.textContent = String(speed);
   return el;
 }
 
 function createZoneSign(speed: number): HTMLDivElement {
-  // E53 Zone: blue rounded square, white number, "Zone" text below
+  // E53 Zone: blue rounded square, white number, "Zone" text below — BIG
   const el = document.createElement("div");
-  el.style.cssText = `width:32px;height:38px;border-radius:4px;background:#2563eb;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui;line-height:1;`;
+  el.style.cssText = `width:40px;height:48px;border-radius:5px;background:#2563eb;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui;line-height:1;`;
   const num = document.createElement("span");
-  num.style.cssText = `font-weight:bold;font-size:12px;color:white;`;
+  num.style.cssText = `font-weight:900;font-size:16px;color:white;`;
   num.textContent = String(speed);
   const zone = document.createElement("span");
-  zone.style.cssText = `font-size:7px;color:white;font-weight:600;margin-top:1px;`;
+  zone.style.cssText = `font-size:8px;color:white;font-weight:700;margin-top:1px;`;
   zone.textContent = "Zone";
   el.appendChild(num);
   el.appendChild(zone);
@@ -385,10 +438,9 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
       if (fk in filters && !filters[fk]) return;
 
       const color = TYPE_COLORS[inter.type] || "#9ca3af";
-      const letter = TYPE_LETTERS[inter.type] || "?";
       const label = TYPE_LABELS[inter.type] || inter.type;
 
-      const pin = createLetterMarker(letter, color, 24);
+      const pin = createIntersectionMarker(inter.type);
       const marker = new google.maps.marker.AdvancedMarkerElement({
         map: mapInstance.current!,
         position: { lat: inter.lat, lng: inter.lng },
@@ -671,8 +723,8 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
     if (mode !== "step" || !steps[currentStep]) return [];
     const step = steps[currentStep];
     const nearby = intersections.filter(
-      (i) => nearPoint(i.lat, i.lng, step.startLat, step.startLng, 40) ||
-             nearPoint(i.lat, i.lng, step.endLat, step.endLng, 40)
+      (i) => nearPoint(i.lat, i.lng, step.startLat, step.startLng, 80) ||
+             nearPoint(i.lat, i.lng, step.endLat, step.endLng, 80)
     );
     const counts: Record<string, number> = {};
     for (const n of nearby) {
@@ -829,10 +881,10 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
               </button>
             </div>
             {FILTER_ITEMS.map((item) => (
-              <label key={item.key} className="flex items-center gap-3 py-2 cursor-pointer">
-                <input type="checkbox" checked={filters[item.key]} onChange={(e) => setFilters({ ...filters, [item.key]: e.target.checked })} className="w-4 h-4 rounded" />
-                <span className="w-3 h-3 rounded-full shrink-0" style={{ background: item.color }} />
-                <span className="text-sm text-slate-700">{item.label}</span>
+              <label key={item.key} className="flex items-center gap-3 py-2.5 cursor-pointer">
+                <input type="checkbox" checked={filters[item.key]} onChange={(e) => setFilters({ ...filters, [item.key]: e.target.checked })} className="w-5 h-5 rounded" />
+                <span className="w-5 h-5 rounded-full shrink-0" style={{ background: item.color }} />
+                <span className="text-base text-slate-700 font-medium">{item.label}</span>
               </label>
             ))}
           </div>
@@ -896,15 +948,18 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
 
             {/* Warnings */}
             {stepWarnings.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2">
+              <div className="flex flex-wrap gap-2 mb-3">
                 {stepWarnings.map((w) => (
-                  <span
+                  <div
                     key={w.type}
-                    className="text-xs px-2.5 py-1 rounded-full text-white font-medium"
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-white font-semibold text-sm shadow-md"
                     style={{ background: TYPE_COLORS[w.type] || "#9ca3af" }}
                   >
-                    {TYPE_LETTERS[w.type]} {TYPE_LABELS[w.type]}{w.count > 1 ? ` x${w.count}` : ""}
-                  </span>
+                    <span className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center text-xs font-black">
+                      {TYPE_LETTERS[w.type]}
+                    </span>
+                    <span>{TYPE_LABELS[w.type]}{w.count > 1 ? ` x${w.count}` : ""}</span>
+                  </div>
                 ))}
               </div>
             )}

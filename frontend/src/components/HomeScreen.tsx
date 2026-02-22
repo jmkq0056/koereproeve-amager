@@ -257,60 +257,81 @@ export default function HomeScreen({
 
         {/* Legend */}
         <div className="bg-slate-800/80 rounded-2xl p-5 mb-6 border border-slate-700/50">
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-5">
             Forklaring
           </h2>
 
           {/* Start marker */}
-          <div className="flex items-center gap-3 mb-3 pb-3 border-b border-slate-700/50">
-            <span className="w-7 h-7 rounded-full bg-green-600 shrink-0 flex items-center justify-center text-white text-xs font-bold border-2 border-white shadow-sm">
+          <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-700/50">
+            <span className="w-9 h-9 rounded-full bg-green-600 shrink-0 flex items-center justify-center text-white text-sm font-bold border-2 border-white shadow-sm">
               S
             </span>
-            <span className="text-slate-300 text-sm">Start / Slut punkt</span>
+            <span className="text-slate-200 text-base font-medium">Start / Slut punkt</span>
           </div>
 
-          {/* Intersection markers with letters */}
-          <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-            <div className="flex items-center gap-2.5">
-              <span className="w-6 h-6 rounded-full bg-red-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border-2 border-white shadow-sm">
-                H
-              </span>
-              <span className="text-slate-300">Højre vigepligt</span>
+          {/* Intersection markers — realistic signs */}
+          <div className="space-y-4 mb-4">
+            {/* Trafiklys */}
+            <div className="flex items-center gap-4">
+              <div className="w-9 flex justify-center shrink-0">
+                <div className="w-5 h-10 rounded bg-neutral-900 border border-neutral-600 flex flex-col items-center justify-center gap-0.5 py-0.5">
+                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                </div>
+              </div>
+              <span className="text-slate-200 text-base font-medium">Trafiklys</span>
             </div>
-            <div className="flex items-center gap-2.5">
-              <span className="w-6 h-6 rounded-full bg-blue-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border-2 border-white shadow-sm">
-                U
-              </span>
-              <span className="text-slate-300">Ubetinget vigepligt</span>
+
+            {/* Stopskilt */}
+            <div className="flex items-center gap-4">
+              <div className="w-9 flex justify-center shrink-0">
+                <span className="w-9 h-9 bg-red-600 flex items-center justify-center text-white text-[7px] font-black" style={{ clipPath: "polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)" }}>
+                  STOP
+                </span>
+              </div>
+              <span className="text-slate-200 text-base font-medium">Stopskilt</span>
             </div>
-            <div className="flex items-center gap-2.5">
-              <span className="w-6 h-6 rounded-full bg-green-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border-2 border-white shadow-sm">
-                T
-              </span>
-              <span className="text-slate-300">Trafiklys</span>
+
+            {/* Ubetinget vigepligt */}
+            <div className="flex items-center gap-4">
+              <div className="w-9 flex justify-center shrink-0">
+                <div className="w-0 h-0" style={{ borderLeft: "16px solid transparent", borderRight: "16px solid transparent", borderTop: "28px solid #dc2626" }}>
+                  <div className="relative" style={{ top: "-25px", left: "-10px", width: 0, height: 0, borderLeft: "10px solid transparent", borderRight: "10px solid transparent", borderTop: "20px solid white" }} />
+                </div>
+              </div>
+              <span className="text-slate-200 text-base font-medium">Ubetinget vigepligt</span>
             </div>
-            <div className="flex items-center gap-2.5">
-              <span className="w-6 h-6 rounded-full bg-yellow-500 shrink-0 flex items-center justify-center text-white text-[10px] font-bold border-2 border-white shadow-sm">
-                S
-              </span>
-              <span className="text-slate-300">Stopskilt</span>
+
+            {/* Højre vigepligt */}
+            <div className="flex items-center gap-4">
+              <div className="w-9 flex justify-center shrink-0">
+                <span className="w-7 h-7 bg-yellow-500 border-2 border-white shadow-sm flex items-center justify-center text-white text-xs font-black" style={{ transform: "rotate(45deg)" }}>
+                  <span style={{ transform: "rotate(-45deg)" }}>H</span>
+                </span>
+              </div>
+              <span className="text-slate-200 text-base font-medium">Højre vigepligt</span>
             </div>
           </div>
 
           {/* Speed limit legend */}
-          <div className="border-t border-slate-700/50 pt-3 space-y-2.5">
-            <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-full bg-white border-[3px] border-red-600 shrink-0 flex items-center justify-center text-[10px] font-bold text-black shadow-sm">
-                50
-              </span>
-              <span className="text-slate-300 text-sm">C55 Fartskilt (50+ km/t)</span>
+          <div className="border-t border-slate-700/50 pt-4 space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="w-9 flex justify-center shrink-0">
+                <span className="w-9 h-9 rounded-full bg-white border-[4px] border-red-600 flex items-center justify-center text-sm font-black text-black shadow-sm">
+                  50
+                </span>
+              </div>
+              <span className="text-slate-200 text-base font-medium">C55 Fartskilt (50+ km/t)</span>
             </div>
-            <div className="flex items-center gap-2.5">
-              <span className="w-7 h-9 rounded bg-blue-600 border-2 border-white shrink-0 flex flex-col items-center justify-center shadow-sm">
-                <span className="text-[10px] font-bold text-white leading-none">30</span>
-                <span className="text-[6px] font-semibold text-white leading-none mt-0.5">Zone</span>
-              </span>
-              <span className="text-slate-300 text-sm">E53 Zoneskilt (30-40 km/t)</span>
+            <div className="flex items-center gap-4">
+              <div className="w-9 flex justify-center shrink-0">
+                <span className="w-9 h-11 rounded bg-blue-600 border-2 border-white flex flex-col items-center justify-center shadow-sm">
+                  <span className="text-sm font-black text-white leading-none">30</span>
+                  <span className="text-[7px] font-bold text-white leading-none mt-0.5">Zone</span>
+                </span>
+              </div>
+              <span className="text-slate-200 text-base font-medium">E53 Zoneskilt (30-40 km/t)</span>
             </div>
           </div>
         </div>
