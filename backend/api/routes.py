@@ -1,9 +1,12 @@
 import random
 import math
+import logging
 from fastapi import APIRouter, Depends
 import httpx
 from config import get_settings, Settings
 from db import routes_col, villa_col, hojre_col
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -31,6 +34,40 @@ def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
          math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
          math.sin(dLng / 2) ** 2)
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def decode_polyline(encoded: str) -> list[tuple[float, float]]:
+    """Decode a Google encoded polyline into list of (lat, lng) tuples."""
+    points = []
+    index = 0
+    lat = 0
+    lng = 0
+    while index < len(encoded):
+        for is_lng in (False, True):
+            shift = 0
+            result = 0
+            while True:
+                b = ord(encoded[index]) - 63
+                index += 1
+                result |= (b & 0x1F) << shift
+                shift += 5
+                if b < 0x20:
+                    break
+            delta = ~(result >> 1) if result & 1 else result >> 1
+            if is_lng:
+                lng += delta
+            else:
+                lat += delta
+        points.append((lat / 1e5, lng / 1e5))
+    return points
+
+
+def polyline_passes_near(encoded: str, target_lat: float, target_lng: float, max_dist_m: float = 500) -> bool:
+    """Check if any point on a decoded polyline is within max_dist_m of target."""
+    for plat, plng in decode_polyline(encoded):
+        if haversine(plat, plng, target_lat, target_lng) < max_dist_m:
+            return True
+    return False
 
 
 async def pick_spread_waypoints(count: int, min_dist_between: float = 300, max_dist_from_start: float = 2000) -> list[dict]:
@@ -110,7 +147,7 @@ async def generate_route(
             entry["via"] = True
         intermediate.append(entry)
 
-    body = {
+    body: dict = {
         "origin": {
             "location": {
                 "latLng": {"latitude": START_LAT, "longitude": START_LNG}
@@ -124,13 +161,16 @@ async def generate_route(
         "intermediates": intermediate,
         "travelMode": "DRIVE",
         "routingPreference": "TRAFFIC_AWARE",
-        "routeModifiers": {
-            "avoidHighways": not include_motorway,
-        },
         "computeAlternativeRoutes": False,
         "languageCode": "da",
         "units": "METRIC",
     }
+
+    # Only set routeModifiers when we need to AVOID highways.
+    # When including motorway, omit routeModifiers entirely so the via
+    # waypoints on the E20 are the only routing constraint.
+    if not include_motorway:
+        body["routeModifiers"] = {"avoidHighways": True}
 
     headers = {
         "Content-Type": "application/json",
@@ -138,62 +178,51 @@ async def generate_route(
         "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.legs.steps.navigationInstruction,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.localizedValues,routes.legs.steps.polyline,routes.legs.steps.speedReadingIntervals,routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline",
     }
 
-    max_retries = 3 if include_motorway else 1
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(ROUTES_API_URL, json=body, headers=headers)
+        data = resp.json()
+
+    # Handle Google API errors explicitly
+    if resp.status_code != 200 or "error" in data:
+        error_detail = data.get("error", {})
+        error_msg = error_detail.get("message", f"HTTP {resp.status_code}")
+        logger.error("Google Routes API error: %s (body: %s)", error_msg, data)
+        return {
+            "start": START_ADDRESS,
+            "include_motorway": include_motorway,
+            "routes_count": 0,
+            "routes": [],
+            "error": f"Google API: {error_msg}",
+        }
+
     routes = []
+    for i, route in enumerate(data.get("routes", [])):
+        duration_str = route.get("duration", "0s")
+        duration_seconds = int(duration_str.replace("s", ""))
+        duration_minutes = duration_seconds / 60
 
-    for attempt in range(max_retries):
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(ROUTES_API_URL, json=body, headers=headers)
-            data = resp.json()
+        polyline_enc = route.get("polyline", {}).get("encodedPolyline", "")
 
-        routes = []
-        for i, route in enumerate(data.get("routes", [])):
-            duration_str = route.get("duration", "0s")
-            duration_seconds = int(duration_str.replace("s", ""))
-            duration_minutes = duration_seconds / 60
+        routes.append({
+            "index": i,
+            "duration_seconds": duration_seconds,
+            "duration_minutes": round(duration_minutes, 1),
+            "distance_meters": route.get("distanceMeters", 0),
+            "polyline": polyline_enc,
+            "legs": route.get("legs", []),
+            "include_motorway": include_motorway,
+            "within_target": 25 <= duration_minutes <= 40,
+        })
 
-            routes.append({
-                "index": i,
-                "duration_seconds": duration_seconds,
-                "duration_minutes": round(duration_minutes, 1),
-                "distance_meters": route.get("distanceMeters", 0),
-                "polyline": route.get("polyline", {}).get("encodedPolyline", ""),
-                "legs": route.get("legs", []),
-                "include_motorway": include_motorway,
-                "within_target": 25 <= duration_minutes <= 40,
-            })
-
-        # Motorway validation: check navigation instructions mention motorway
-        if include_motorway and routes:
-            has_motorway = False
-            for route in routes:
-                for leg in route.get("legs", []):
-                    for step in leg.get("steps", []):
-                        nav = step.get("navigationInstruction", {})
-                        instr = (nav.get("instructions", "") or "").lower()
-                        if any(kw in instr for kw in ["motorvej", "e20", "e 20", "motorway"]):
-                            has_motorway = True
-                            break
-                    if has_motorway:
-                        break
-                if has_motorway:
-                    break
-            if has_motorway:
-                break
-            # Retry with different villa waypoints
-            if attempt < max_retries - 1:
-                pre = await pick_spread_waypoints(1)
-                post = await pick_spread_waypoints(1)
-                waypoints = pre + [MOTORWAY_EAST, MOTORWAY_TUNNEL, TAARNBY_RUNDKOERSEL] + post
-                intermediate = []
-                for wp in waypoints:
-                    entry = {"location": {"latLng": {"latitude": wp["lat"], "longitude": wp["lng"]}}}
-                    if wp in [MOTORWAY_EAST, MOTORWAY_TUNNEL, TAARNBY_RUNDKOERSEL]:
-                        entry["via"] = True
-                    intermediate.append(entry)
-                body["intermediates"] = intermediate
-        else:
-            break
+    # Diagnostic: verify the polyline actually passes near the motorway tunnel
+    if include_motorway and routes:
+        poly = routes[0].get("polyline", "")
+        if poly:
+            near_tunnel = polyline_passes_near(poly, MOTORWAY_TUNNEL["lat"], MOTORWAY_TUNNEL["lng"], 500)
+            near_east = polyline_passes_near(poly, MOTORWAY_EAST["lat"], MOTORWAY_EAST["lng"], 500)
+            logger.info("Motorway check: near_tunnel=%s near_east=%s", near_tunnel, near_east)
+            if not near_tunnel and not near_east:
+                logger.warning("Route polyline does NOT pass near motorway waypoints!")
 
     # Save to MongoDB
     if routes:

@@ -78,7 +78,9 @@ function App() {
     setError(null);
     try {
       const data = await fetchRoute(includeMotorway);
-      if (data.routes.length > 0) {
+      if (data.error) {
+        setError(data.error);
+      } else if (data.routes.length > 0) {
         const best = data.routes[0];
         const route: RouteData = {
           duration_minutes: best.duration_minutes,
