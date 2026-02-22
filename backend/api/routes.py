@@ -12,9 +12,12 @@ START_LAT = 55.634464
 START_LNG = 12.650135
 
 TAARNBY_RUNDKOERSEL = {"lat": 55.6180, "lng": 12.6050}
-# E20 motorway waypoints — confirmed on OSM way 30791075
-MOTORWAY_WEST = {"lat": 55.6295, "lng": 12.605}
-MOTORWAY_EAST = {"lat": 55.6305, "lng": 12.640}
+# E20 motorway waypoints — exact OSM node coordinates
+# Route: Start(Kastrup) → villa → E20 east → westbound through tunnel → Tårnby → villa → Start
+# Entry near Kastrup (OSM node 118900, non-toll section)
+MOTORWAY_EAST = {"lat": 55.6302, "lng": 12.6351}
+# Tårnby tunnel midpoint — ONLY motorway here, no parallel surface roads
+MOTORWAY_TUNNEL = {"lat": 55.6294, "lng": 12.6046}
 
 ROUTES_API_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 
@@ -83,12 +86,12 @@ async def generate_route(
     Target: 25-35 min round trip.
     """
     if include_motorway:
-        # 1 villa → motorway west (E20) → motorway east (E20) → Tarnby rundkørsel → 1 villa → back
+        # villa → E20 east entry → westbound through tunnel → Tårnby rundkørsel → villa → back
         pre = await pick_spread_waypoints(1)
         post = await pick_spread_waypoints(1)
         villa_wps = pre + post
-        motorway_wps = [MOTORWAY_WEST, MOTORWAY_EAST, TAARNBY_RUNDKOERSEL]
-        waypoints = pre + [MOTORWAY_WEST, MOTORWAY_EAST, TAARNBY_RUNDKOERSEL] + post
+        motorway_wps = [MOTORWAY_EAST, MOTORWAY_TUNNEL, TAARNBY_RUNDKOERSEL]
+        waypoints = pre + [MOTORWAY_EAST, MOTORWAY_TUNNEL, TAARNBY_RUNDKOERSEL] + post
     else:
         # 3 random villa waypoints creating a residential loop
         villa_wps = await pick_spread_waypoints(3)
@@ -160,28 +163,32 @@ async def generate_route(
                 "within_target": 25 <= duration_minutes <= 40,
             })
 
-        # Motorway validation: check speed reading intervals for >=110 km/h segment
+        # Motorway validation: check navigation instructions mention motorway
         if include_motorway and routes:
-            has_motorway_speed = False
+            has_motorway = False
             for route in routes:
                 for leg in route.get("legs", []):
                     for step in leg.get("steps", []):
-                        for sri in step.get("speedReadingIntervals", []):
-                            speed = sri.get("speed", "")
-                            if speed == "NORMAL" or speed == "FAST":
-                                has_motorway_speed = True
-                                break
-            if has_motorway_speed:
+                        nav = step.get("navigationInstruction", {})
+                        instr = (nav.get("instructions", "") or "").lower()
+                        if any(kw in instr for kw in ["motorvej", "e20", "e 20", "motorway"]):
+                            has_motorway = True
+                            break
+                    if has_motorway:
+                        break
+                if has_motorway:
+                    break
+            if has_motorway:
                 break
             # Retry with different villa waypoints
             if attempt < max_retries - 1:
                 pre = await pick_spread_waypoints(1)
                 post = await pick_spread_waypoints(1)
-                waypoints = pre + [MOTORWAY_WEST, MOTORWAY_EAST, TAARNBY_RUNDKOERSEL] + post
+                waypoints = pre + [MOTORWAY_EAST, MOTORWAY_TUNNEL, TAARNBY_RUNDKOERSEL] + post
                 intermediate = []
                 for wp in waypoints:
                     entry = {"location": {"latLng": {"latitude": wp["lat"], "longitude": wp["lng"]}}}
-                    if wp in [MOTORWAY_WEST, MOTORWAY_EAST, TAARNBY_RUNDKOERSEL]:
+                    if wp in [MOTORWAY_EAST, MOTORWAY_TUNNEL, TAARNBY_RUNDKOERSEL]:
                         entry["via"] = True
                     intermediate.append(entry)
                 body["intermediates"] = intermediate
