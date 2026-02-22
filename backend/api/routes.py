@@ -175,7 +175,7 @@ async def generate_route(
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": settings.G_API_KEY,
-        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.legs.steps.navigationInstruction,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.localizedValues,routes.legs.steps.polyline,routes.legs.steps.speedReadingIntervals,routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline",
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.legs.steps.navigationInstruction,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.localizedValues,routes.legs.steps.polyline,routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline",
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
