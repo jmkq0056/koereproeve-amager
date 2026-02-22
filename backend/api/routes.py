@@ -17,16 +17,14 @@ START_LNG = 12.650135
 # E20 motorway waypoints — real driving test checkpoints
 # Always exit at the same west off-ramp
 MOTORWAY_EXIT = {"lat": 55.629318, "lng": 12.603788}
-# Two route variations (east → west along E20)
-MOTORWAY_ROUTE_A = [
+# Two route variations — via points (pass-through on E20 only)
+MOTORWAY_VIA_A = [
     {"lat": 55.633517, "lng": 12.656518},   # entry east
     {"lat": 55.630170, "lng": 12.641366},   # mid checkpoint
-    MOTORWAY_EXIT,                            # exit west
 ]
-MOTORWAY_ROUTE_B = [
+MOTORWAY_VIA_B = [
     {"lat": 55.630433, "lng": 12.655834},   # entry east
     {"lat": 55.630201, "lng": 12.628568},   # mid checkpoint
-    MOTORWAY_EXIT,                            # exit west
 ]
 
 ROUTES_API_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
@@ -131,11 +129,13 @@ async def generate_route(
     """
     if include_motorway:
         # Motorway FIRST (like real driving test), then villa area
-        # Start → E20 (east→west) → villa → back
-        motorway_wps = random.choice([MOTORWAY_ROUTE_A, MOTORWAY_ROUTE_B])
+        # Start → E20 via points → EXIT (stop) → villa → back
+        # Exit is a real stop so Google routes to villa on surface roads
+        motorway_via = random.choice([MOTORWAY_VIA_A, MOTORWAY_VIA_B])
+        motorway_wps = list(motorway_via)  # only these are via (pass-through)
         post = await pick_spread_waypoints(2)
         villa_wps = post
-        waypoints = motorway_wps + post
+        waypoints = motorway_via + [MOTORWAY_EXIT] + post
     else:
         # 3 random villa waypoints creating a residential loop
         villa_wps = await pick_spread_waypoints(3)

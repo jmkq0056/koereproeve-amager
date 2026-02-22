@@ -283,9 +283,10 @@ function scaleForZoom(zoom: number): number {
 }
 
 function wrapScalable(inner: HTMLDivElement, zoom: number): HTMLDivElement {
+  const s = scaleForZoom(zoom);
   const el = document.createElement("div");
   el.className = "marker-scale";
-  el.style.cssText = `transform-origin:center;transform:scale(${scaleForZoom(zoom)});transition:transform 0.15s;`;
+  el.style.cssText = `transform-origin:center;transform:scale(${s});-webkit-transform:scale(${s});transition:transform 0.15s;will-change:transform;`;
   el.appendChild(inner);
   return el;
 }
@@ -374,6 +375,11 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
       boundsRef.current = bounds;
       map.fitBounds(bounds, 60);
 
+      // First idle = map fully rendered (tiles loaded) — safe for markers on iOS
+      const firstIdle = map.addListener("idle", () => {
+        google.maps.event.removeListener(firstIdle);
+        setMapReady(true);
+      });
       map.addListener("idle", () => {
         if (!boundsRef.current) return;
         const cb = map.getBounds();
@@ -409,8 +415,6 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
       // Street view visible listener
       const sv = map.getStreetView();
       sv.addListener("visible_changed", () => setStreetViewActive(sv.getVisible()));
-
-      setMapReady(true);
     };
     init();
     return () => {
