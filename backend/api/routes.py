@@ -123,12 +123,13 @@ async def generate_route(
     Target: 25-35 min round trip.
     """
     if include_motorway:
-        # villa → E20 east entry → westbound through tunnel → Tårnby rundkørsel → villa → back
+        # villa → through E20 tunnel (only motorway there) → villa → back
+        # Single tunnel via point keeps the route short (~25-35 min)
         pre = await pick_spread_waypoints(1)
         post = await pick_spread_waypoints(1)
         villa_wps = pre + post
-        motorway_wps = [MOTORWAY_EAST, MOTORWAY_TUNNEL, TAARNBY_RUNDKOERSEL]
-        waypoints = pre + [MOTORWAY_EAST, MOTORWAY_TUNNEL, TAARNBY_RUNDKOERSEL] + post
+        motorway_wps = [MOTORWAY_TUNNEL]
+        waypoints = pre + [MOTORWAY_TUNNEL] + post
     else:
         # 3 random villa waypoints creating a residential loop
         villa_wps = await pick_spread_waypoints(3)
