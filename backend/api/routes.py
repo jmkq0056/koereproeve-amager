@@ -130,13 +130,12 @@ async def generate_route(
     Target: 25-35 min round trip.
     """
     if include_motorway:
-        # villa → E20 (east→west) → villa → back
-        # Randomly pick one of two real driving test motorway routes
-        pre = await pick_spread_waypoints(1)
-        post = await pick_spread_waypoints(1)
-        villa_wps = pre + post
+        # Motorway FIRST (like real driving test), then villa area
+        # Start → E20 (east→west) → villa → back
         motorway_wps = random.choice([MOTORWAY_ROUTE_A, MOTORWAY_ROUTE_B])
-        waypoints = pre + motorway_wps + post
+        post = await pick_spread_waypoints(2)
+        villa_wps = post
+        waypoints = motorway_wps + post
     else:
         # 3 random villa waypoints creating a residential loop
         villa_wps = await pick_spread_waypoints(3)
