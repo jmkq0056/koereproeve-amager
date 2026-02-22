@@ -6,6 +6,7 @@ router = APIRouter()
 speed_col = db["speed_limits"]
 signed_col = db["signed_intersections"]
 hojre_col = db["hojre_vigepligt"]
+google_speed_col = db["google_speed_limits"]
 
 
 @router.get("/intersections")
@@ -33,6 +34,13 @@ async def get_hojre_vigepligt():
         "hojre_vigepligt": hojre,
         "signed": signed,
     }
+
+
+@router.get("/google-speed-limits")
+async def get_google_speed_limits():
+    """All Google Roads API speed limits from MongoDB (seeded once)."""
+    docs = await google_speed_col.find({}, {"_id": 0}).to_list(50000)
+    return {"count": len(docs), "speed_limits": docs}
 
 
 @router.post("/hojre-vigepligt/bulk-delete")

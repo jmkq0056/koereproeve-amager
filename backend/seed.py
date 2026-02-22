@@ -287,6 +287,99 @@ async def seed_hojre_vigepligt(signed_ids: set):
     print(f"  Skip reasons: {dict(skip_reasons)}")
 
 
+async def seed_google_speed_limits():
+    """
+    One-time seed: query Google Roads API speedLimits across Amager grid.
+    Generates ~100m-spaced points within the radius, batches them (100 per request),
+    and stores results in google_speed_limits collection.
+    """
+    print("\n=== GOOGLE SPEED LIMITS (one-time seed) ===")
+    import math
+
+    # Generate grid of points across the area (~100m spacing)
+    step_deg = 0.001  # ~111m latitude, ~60m longitude at this lat
+    points = []
+    lat_range = RADIUS / 111000  # Convert meters to degrees
+    lng_range = RADIUS / (111000 * math.cos(math.radians(START_LAT)))
+
+    lat = START_LAT - lat_range
+    while lat <= START_LAT + lat_range:
+        lng = START_LNG - lng_range
+        while lng <= START_LNG + lng_range:
+            # Check within circle
+            dlat = (lat - START_LAT) * 111000
+            dlng = (lng - START_LNG) * 111000 * math.cos(math.radians(START_LAT))
+            if math.sqrt(dlat**2 + dlng**2) <= RADIUS:
+                points.append((round(lat, 6), round(lng, 6)))
+            lng += step_deg
+        lat += step_deg
+
+    print(f"  Generated {len(points)} grid points")
+
+    # Batch into groups of 100 (API limit)
+    batch_size = 100
+    batches = [points[i:i+batch_size] for i in range(0, len(points), batch_size)]
+    print(f"  {len(batches)} batches to process")
+
+    all_speed_limits = []
+    for batch_idx, batch in enumerate(batches):
+        path_str = "|".join(f"{lat},{lng}" for lat, lng in batch)
+        url = f"https://roads.googleapis.com/v1/speedLimits?path={path_str}&key={settings.G_API_KEY}"
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as c:
+                resp = await c.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    speed_limits = data.get("speedLimits", [])
+                    snapped_points = data.get("snappedPoints", [])
+
+                    # Build placeId -> snapped location mapping
+                    place_locs = {}
+                    for sp in snapped_points:
+                        loc = sp.get("location", {})
+                        pid = sp.get("placeId", "")
+                        if pid and loc:
+                            place_locs[pid] = {"lat": loc.get("latitude", 0), "lng": loc.get("longitude", 0)}
+
+                    for sl in speed_limits:
+                        pid = sl.get("placeId", "")
+                        loc = place_locs.get(pid, {})
+                        all_speed_limits.append({
+                            "placeId": pid,
+                            "speedLimit": sl.get("speedLimit", 0),
+                            "units": sl.get("units", "KPH"),
+                            "lat": loc.get("lat", 0),
+                            "lng": loc.get("lng", 0),
+                        })
+                    print(f"  Batch {batch_idx+1}/{len(batches)}: {len(speed_limits)} speed limits")
+                elif resp.status_code == 429:
+                    print(f"  Batch {batch_idx+1}: rate limited, waiting 60s...")
+                    await asyncio.sleep(60)
+                else:
+                    print(f"  Batch {batch_idx+1}: status {resp.status_code} - {resp.text[:100]}")
+        except Exception as e:
+            print(f"  Batch {batch_idx+1}: error {type(e).__name__}: {e}")
+
+        # Be polite with API
+        if batch_idx < len(batches) - 1:
+            await asyncio.sleep(1)
+
+    # Deduplicate by placeId
+    seen = set()
+    unique = []
+    for sl in all_speed_limits:
+        if sl["placeId"] not in seen:
+            seen.add(sl["placeId"])
+            unique.append(sl)
+
+    col = db["google_speed_limits"]
+    await col.drop()
+    if unique:
+        await col.insert_many(unique)
+    print(f"  Stored {len(unique)} unique Google speed limit records")
+
+
 async def seed_villa_streets():
     print("\n=== VILLA KVARTERER (residential streets) ===")
     query = f"""
@@ -338,16 +431,17 @@ async def main():
     print(f"DB: {settings.DB_NAME}")
     print("=" * 50)
 
-    # Run all 4 in parallel — each hits a different mirror endpoint
+    # Run all in parallel — each hits a different mirror/API endpoint
     speed_task = asyncio.create_task(seed_speed_limits())
     signed_task = asyncio.create_task(seed_signed_intersections())
     villa_task = asyncio.create_task(seed_villa_streets())
+    google_task = asyncio.create_task(seed_google_speed_limits())
 
     # hojre needs signed_ids, so wait for signed first then fire it
     signed_ids = await signed_task
     hojre_task = asyncio.create_task(seed_hojre_vigepligt(signed_ids))
 
-    await asyncio.gather(speed_task, villa_task, hojre_task)
+    await asyncio.gather(speed_task, villa_task, hojre_task, google_task)
 
     print("\n" + "=" * 50)
     print("DONE! All data stored in MongoDB.")

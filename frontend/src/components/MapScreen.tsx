@@ -1,11 +1,12 @@
 import { useEffect, useRef, useCallback, useState } from "react";
-import type { Intersection, Road, VillaStreet, RouteData, MarkerFilter, Step } from "../types";
+import type { Intersection, Road, VillaStreet, RouteData, MarkerFilter, Step, GoogleSpeedLimit } from "../types";
 
 interface Props {
   route: RouteData;
   intersections: Intersection[];
   roads: Road[];
   villaStreets: VillaStreet[];
+  googleSpeeds: GoogleSpeedLimit[];
   filters: MarkerFilter;
   setFilters: (f: MarkerFilter) => void;
   onBack: () => void;
@@ -76,6 +77,25 @@ const IconPlay = () => (
 const IconList = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+  </svg>
+);
+
+const IconPause = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+  </svg>
+);
+
+const IconCar = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a1 1 0 0 0-.8-.4H5.24a2 2 0 0 0-1.8 1.1l-.8 1.63A6 6 0 0 0 2 12.42V16h2"/>
+    <circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>
+  </svg>
+);
+
+const IconStop = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="4" width="16" height="16" rx="2"/>
   </svg>
 );
 
@@ -176,17 +196,36 @@ function createLetterMarker(letter: string, color: string, size: number): HTMLDi
   return el;
 }
 
-function createSpeedSign(speed: string): HTMLDivElement {
+function createSpeedSign(speed: number): HTMLDivElement {
+  if (speed <= 40) {
+    return createZoneSign(speed);
+  }
+  // C55 Regular: red circle border, white bg, black number
   const el = document.createElement("div");
   el.style.cssText = `width:28px;height:28px;border-radius:50%;background:white;border:3px solid #dc2626;box-shadow:0 1px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;color:#111;font-family:system-ui;`;
-  el.textContent = speed;
+  el.textContent = String(speed);
+  return el;
+}
+
+function createZoneSign(speed: number): HTMLDivElement {
+  // E53 Zone: blue rounded square, white number, "Zone" text below
+  const el = document.createElement("div");
+  el.style.cssText = `width:32px;height:38px;border-radius:4px;background:#2563eb;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui;line-height:1;`;
+  const num = document.createElement("span");
+  num.style.cssText = `font-weight:bold;font-size:12px;color:white;`;
+  num.textContent = String(speed);
+  const zone = document.createElement("span");
+  zone.style.cssText = `font-size:7px;color:white;font-weight:600;margin-top:1px;`;
+  zone.textContent = "Zone";
+  el.appendChild(num);
+  el.appendChild(zone);
   return el;
 }
 
 const START_LAT = 55.634464;
 const START_LNG = 12.650135;
 
-export default function MapScreen({ route, intersections, roads, villaStreets, filters, setFilters, onBack, onSave }: Props) {
+export default function MapScreen({ route, intersections, roads, villaStreets, googleSpeeds, filters, setFilters, onBack, onSave }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
@@ -210,6 +249,16 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
   const [steps, setSteps] = useState<Step[]>([]);
   const [villaMode, setVillaMode] = useState(false);
   const prevFiltersRef = useRef<MarkerFilter | null>(null);
+
+  // Auto mode state
+  const [autoMode, setAutoMode] = useState(false);
+  const autoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Street View drive state
+  const [svDriving, setSvDriving] = useState(false);
+  const [svPointIndex, setSvPointIndex] = useState(0);
+  const svPointsRef = useRef<{ lat: number; lng: number }[]>([]);
+  const svDriveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     setSteps(parseSteps(route.legs || []));
@@ -356,7 +405,7 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
     });
   }, [intersections, filters]);
 
-  // Speed signs — skip motorway/trunk roads
+  // Speed signs — prefer Google speed data, fallback to OSM
   useEffect(() => {
     if (!mapInstance.current) return;
     speedMarkersRef.current.forEach((m) => (m.map = null));
@@ -364,30 +413,61 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
     if (!filters.speed_limits) return;
 
     const rPts = routePointsRef.current;
-    roads.forEach((road) => {
-      if (road.geometry.length < 2) return;
-      if (SKIP_ROAD_TYPES.has(road.highway_type)) return;
-      const isNear = road.geometry.some((g) => nearRoute(g.lat, g.lng, rPts, 150));
-      if (!isNear) return;
 
-      const midIdx = Math.floor(road.geometry.length / 2);
-      const midPt = road.geometry[midIdx];
-      const sign = createSpeedSign(road.maxspeed);
-      const marker = new google.maps.marker.AdvancedMarkerElement({
-        map: mapInstance.current!,
-        position: { lat: midPt.lat, lng: midPt.lng },
-        content: sign,
-        title: `${road.name} -- ${road.maxspeed} km/t`,
+    if (googleSpeeds.length > 0) {
+      // Use Google speed limit points near route
+      const shown = new Set<string>();
+      googleSpeeds.forEach((gs) => {
+        if (!gs.lat || !gs.lng || !gs.speedLimit) return;
+        if (!nearRoute(gs.lat, gs.lng, rPts, 150)) return;
+        // Deduplicate by grid cell (~100m)
+        const gridKey = `${Math.round(gs.lat * 1000)}_${Math.round(gs.lng * 1000)}`;
+        if (shown.has(gridKey)) return;
+        shown.add(gridKey);
+
+        const sign = createSpeedSign(gs.speedLimit);
+        const marker = new google.maps.marker.AdvancedMarkerElement({
+          map: mapInstance.current!,
+          position: { lat: gs.lat, lng: gs.lng },
+          content: sign,
+          title: `${gs.speedLimit} km/t`,
+        });
+        marker.addListener("click", () => {
+          infoWindowRef.current?.setContent(
+            `<div style="font:13px system-ui;padding:4px"><strong>${gs.speedLimit} km/t</strong><br/><span style="color:#888">Google Roads API</span></div>`
+          );
+          infoWindowRef.current?.open(mapInstance.current!, marker);
+        });
+        speedMarkersRef.current.push(marker);
       });
-      marker.addListener("click", () => {
-        infoWindowRef.current?.setContent(
-          `<div style="font:13px system-ui;padding:4px"><strong>${road.name}</strong><br/>${road.maxspeed} km/t</div>`
-        );
-        infoWindowRef.current?.open(mapInstance.current!, marker);
+    } else {
+      // Fallback: OSM speed data
+      roads.forEach((road) => {
+        if (road.geometry.length < 2) return;
+        if (SKIP_ROAD_TYPES.has(road.highway_type)) return;
+        const isNear = road.geometry.some((g) => nearRoute(g.lat, g.lng, rPts, 150));
+        if (!isNear) return;
+
+        const midIdx = Math.floor(road.geometry.length / 2);
+        const midPt = road.geometry[midIdx];
+        const speedNum = parseInt(road.maxspeed) || 50;
+        const sign = createSpeedSign(speedNum);
+        const marker = new google.maps.marker.AdvancedMarkerElement({
+          map: mapInstance.current!,
+          position: { lat: midPt.lat, lng: midPt.lng },
+          content: sign,
+          title: `${road.name} -- ${road.maxspeed} km/t`,
+        });
+        marker.addListener("click", () => {
+          infoWindowRef.current?.setContent(
+            `<div style="font:13px system-ui;padding:4px"><strong>${road.name}</strong><br/>${road.maxspeed} km/t</div>`
+          );
+          infoWindowRef.current?.open(mapInstance.current!, marker);
+        });
+        speedMarkersRef.current.push(marker);
       });
-      speedMarkersRef.current.push(marker);
-    });
-  }, [roads, filters.speed_limits]);
+    }
+  }, [roads, googleSpeeds, filters.speed_limits]);
 
   const resetView = useCallback(() => {
     if (mapInstance.current && boundsRef.current) mapInstance.current.fitBounds(boundsRef.current, 60);
@@ -478,12 +558,112 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
     }
   }, [villaMode, filters, setFilters]);
 
+  const stopAutoMode = useCallback(() => {
+    if (autoTimerRef.current) {
+      clearInterval(autoTimerRef.current);
+      autoTimerRef.current = null;
+    }
+    setAutoMode(false);
+  }, []);
+
   const goNextStep = useCallback(() => {
+    stopAutoMode();
     setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
-  }, [steps.length]);
+  }, [steps.length, stopAutoMode]);
 
   const goPrevStep = useCallback(() => {
+    stopAutoMode();
     setCurrentStep((prev) => Math.max(prev - 1, 0));
+  }, [stopAutoMode]);
+
+  const toggleAutoMode = useCallback(() => {
+    if (autoMode) {
+      stopAutoMode();
+      return;
+    }
+    setAutoMode(true);
+    autoTimerRef.current = setInterval(() => {
+      setCurrentStep((prev) => {
+        if (prev >= steps.length - 1) {
+          stopAutoMode();
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 3500);
+  }, [autoMode, steps.length, stopAutoMode]);
+
+  // Cleanup auto timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoTimerRef.current) clearInterval(autoTimerRef.current);
+      if (svDriveTimerRef.current) clearInterval(svDriveTimerRef.current);
+    };
+  }, []);
+
+  // Street View drive: sample route polyline every ~30m
+  const startSvDrive = useCallback(() => {
+    const rPts = routePointsRef.current;
+    if (rPts.length < 2) return;
+
+    // Sample points every ~30m
+    const sampled: { lat: number; lng: number }[] = [rPts[0]];
+    let accumulated = 0;
+    for (let i = 1; i < rPts.length; i++) {
+      accumulated += distM(rPts[i - 1].lat, rPts[i - 1].lng, rPts[i].lat, rPts[i].lng);
+      if (accumulated >= 30) {
+        sampled.push(rPts[i]);
+        accumulated = 0;
+      }
+    }
+    if (sampled.length < 2) return;
+
+    svPointsRef.current = sampled;
+    setSvPointIndex(0);
+    setSvDriving(true);
+
+    // Open street view at first point
+    const map = mapInstance.current;
+    if (!map) return;
+    const sv = map.getStreetView();
+    const first = sampled[0];
+    const second = sampled[1];
+    const heading = google.maps.geometry.spherical.computeHeading(
+      new google.maps.LatLng(first.lat, first.lng),
+      new google.maps.LatLng(second.lat, second.lng)
+    );
+    sv.setPosition({ lat: first.lat, lng: first.lng });
+    sv.setPov({ heading, pitch: 0 });
+    sv.setVisible(true);
+
+    // Start auto-advance timer
+    let idx = 0;
+    svDriveTimerRef.current = setInterval(() => {
+      idx++;
+      if (idx >= sampled.length) {
+        stopSvDrive();
+        return;
+      }
+      setSvPointIndex(idx);
+      const pt = sampled[idx];
+      const nextPt = sampled[Math.min(idx + 1, sampled.length - 1)];
+      const h = google.maps.geometry.spherical.computeHeading(
+        new google.maps.LatLng(pt.lat, pt.lng),
+        new google.maps.LatLng(nextPt.lat, nextPt.lng)
+      );
+      sv.setPosition({ lat: pt.lat, lng: pt.lng });
+      sv.setPov({ heading: h, pitch: 0 });
+    }, 2000);
+  }, []);
+
+  const stopSvDrive = useCallback(() => {
+    if (svDriveTimerRef.current) {
+      clearInterval(svDriveTimerRef.current);
+      svDriveTimerRef.current = null;
+    }
+    setSvDriving(false);
+    setSvPointIndex(0);
+    mapInstance.current?.getStreetView().setVisible(false);
   }, []);
 
   // Nearby intersections for current step — deduplicated by type
@@ -510,18 +690,35 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
     );
   }, [mode, currentStep, steps, villaStreets]);
 
-  // Speed for step — skip motorway/trunk roads
-  const getSpeedForStep = useCallback((): string | null => {
+  // Speed for step — prefer Google data, fallback to OSM
+  const getSpeedForStep = useCallback((): number | null => {
     if (mode !== "step" || !steps[currentStep]) return null;
     const step = steps[currentStep];
+
+    // Try Google speed data first
+    if (googleSpeeds.length > 0) {
+      let closest: GoogleSpeedLimit | null = null;
+      let closestDist = Infinity;
+      for (const gs of googleSpeeds) {
+        if (!gs.lat || !gs.lng || !gs.speedLimit) continue;
+        const d = distM(gs.lat, gs.lng, step.startLat, step.startLng);
+        if (d < 80 && d < closestDist) {
+          closestDist = d;
+          closest = gs;
+        }
+      }
+      if (closest) return closest.speedLimit;
+    }
+
+    // Fallback: OSM
     for (const road of roads) {
       if (SKIP_ROAD_TYPES.has(road.highway_type)) continue;
       if (road.geometry.some((g) => nearPoint(g.lat, g.lng, step.startLat, step.startLng, 60))) {
-        return road.maxspeed;
+        return parseInt(road.maxspeed) || null;
       }
     }
     return null;
-  }, [mode, currentStep, steps, roads]);
+  }, [mode, currentStep, steps, roads, googleSpeeds]);
 
   const FILTER_ITEMS: { key: keyof MarkerFilter; label: string; color: string }[] = [
     { key: "hojre_vigepligt", label: "Højre vigepligt", color: "#ef4444" },
@@ -586,12 +783,24 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
 
-        {/* Street view exit */}
+        {/* Street view exit + drive controls */}
         {streetViewActive && (
           <div className="absolute top-0 left-0 right-0 z-20 pt-[max(env(safe-area-inset-top),8px)] px-4 pb-2 bg-black/60 backdrop-blur-sm">
+            {svDriving && (
+              <div className="mt-2 mb-2 flex items-center justify-between bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  Kører... ({svPointIndex + 1}/{svPointsRef.current.length})
+                </span>
+                <button onClick={stopSvDrive} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs flex items-center gap-1">
+                  <IconStop />
+                  Stop
+                </button>
+              </div>
+            )}
             <button
-              onClick={exitStreetView}
-              className="mt-2 bg-white text-slate-800 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg w-full flex items-center justify-center gap-2 active:bg-slate-100"
+              onClick={() => { if (svDriving) stopSvDrive(); else exitStreetView(); }}
+              className="bg-white text-slate-800 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg w-full flex items-center justify-center gap-2 active:bg-slate-100"
             >
               <IconBack />
               Tilbage til kort
@@ -672,9 +881,16 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
                 </p>
               </div>
               {speedLimit && (
-                <div className="shrink-0 w-10 h-10 rounded-full bg-white border-[3px] border-red-600 flex items-center justify-center shadow-sm">
-                  <span className="text-sm font-bold text-black">{speedLimit}</span>
-                </div>
+                speedLimit <= 40 ? (
+                  <div className="shrink-0 w-10 h-12 rounded bg-blue-600 border-2 border-white flex flex-col items-center justify-center shadow-sm">
+                    <span className="text-sm font-bold text-white">{speedLimit}</span>
+                    <span className="text-[7px] font-semibold text-white">Zone</span>
+                  </div>
+                ) : (
+                  <div className="shrink-0 w-10 h-10 rounded-full bg-white border-[3px] border-red-600 flex items-center justify-center shadow-sm">
+                    <span className="text-sm font-bold text-black">{speedLimit}</span>
+                  </div>
+                )
               )}
             </div>
 
@@ -704,6 +920,9 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
                 <IconChevronLeft />
                 Forrige
               </button>
+              <button onClick={toggleAutoMode} className={`px-4 py-3 rounded-xl transition-colors flex items-center justify-center ${autoMode ? "bg-amber-100 text-amber-700" : "bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700"}`} title={autoMode ? "Pause auto" : "Auto gennemgang"}>
+                {autoMode ? <IconPause /> : <IconCar />}
+              </button>
               <button onClick={openStreetViewAtStep} className="bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 px-4 py-3 rounded-xl transition-colors flex items-center justify-center" title="Gadevisning">
                 <IconEye />
               </button>
@@ -727,6 +946,10 @@ export default function MapScreen({ route, intersections, roads, villaStreets, f
             <button onClick={() => setPanel(panel === "filters" ? "none" : "filters")} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs transition-colors ${panel === "filters" ? "text-blue-500 bg-blue-50" : "text-slate-500"}`}>
               <IconFilter />
               <span>Filter</span>
+            </button>
+            <button onClick={startSvDrive} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-slate-500 transition-colors">
+              <IconCar />
+              <span>Kør rute</span>
             </button>
             <button onClick={openStreetViewAtStep} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-slate-500 transition-colors">
               <IconEye />

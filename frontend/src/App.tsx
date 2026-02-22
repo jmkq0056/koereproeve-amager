@@ -7,8 +7,9 @@ import {
   fetchHojreVigepligt,
   fetchSpeedLimits,
   fetchVillaAreas,
+  fetchGoogleSpeedLimits,
 } from "./api";
-import type { Intersection, Road, VillaStreet, RouteData, MarkerFilter, Screen } from "./types";
+import type { Intersection, Road, VillaStreet, RouteData, MarkerFilter, Screen, GoogleSpeedLimit } from "./types";
 
 const G_API_KEY = import.meta.env.VITE_G_API_KEY;
 
@@ -20,6 +21,7 @@ function App() {
   const [intersections, setIntersections] = useState<Intersection[]>([]);
   const [roads, setRoads] = useState<Road[]>([]);
   const [villaStreets, setVillaStreets] = useState<VillaStreet[]>([]);
+  const [googleSpeeds, setGoogleSpeeds] = useState<GoogleSpeedLimit[]>([]);
   const [activeRoute, setActiveRoute] = useState<RouteData | null>(null);
   const [filters, setFilters] = useState<MarkerFilter>({
     hojre_vigepligt: true,
@@ -62,10 +64,12 @@ function App() {
       fetchHojreVigepligt().catch(() => ({ hojre_vigepligt: [], signed: [] })),
       fetchSpeedLimits().catch(() => ({ roads: [] })),
       fetchVillaAreas().catch(() => ({ villa_streets: [], neighborhoods: [] })),
-    ]).then(([vigepligt, speed, villa]) => {
+      fetchGoogleSpeedLimits().catch(() => ({ speed_limits: [] })),
+    ]).then(([vigepligt, speed, villa, gSpeed]) => {
       setIntersections([...vigepligt.hojre_vigepligt, ...vigepligt.signed]);
       setRoads(speed.roads);
       setVillaStreets(villa.villa_streets);
+      setGoogleSpeeds(gSpeed.speed_limits || []);
     }).finally(() => setDataLoading(false));
   }, [mapsLoaded]);
 
@@ -98,7 +102,8 @@ function App() {
 
   const handleSaveRoute = useCallback(() => {
     if (!activeRoute) return;
-    const updated = [...savedRoutes, activeRoute];
+    const withTimestamp = { ...activeRoute, created_at: new Date().toISOString() };
+    const updated = [...savedRoutes, withTimestamp];
     setSavedRoutes(updated);
     localStorage.setItem("saved_routes", JSON.stringify(updated));
   }, [activeRoute, savedRoutes]);
@@ -146,6 +151,7 @@ function App() {
         intersections={intersections}
         roads={roads}
         villaStreets={villaStreets}
+        googleSpeeds={googleSpeeds}
         filters={filters}
         setFilters={setFilters}
         onBack={handleBackToHome}

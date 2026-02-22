@@ -12,7 +12,9 @@ START_LAT = 55.634464
 START_LNG = 12.650135
 
 TAARNBY_RUNDKOERSEL = {"lat": 55.6180, "lng": 12.6050}
-MOTORWAY_ONRAMP = {"lat": 55.6250, "lng": 12.6200}
+# E20 motorway waypoints — confirmed on OSM way 30791075
+MOTORWAY_WEST = {"lat": 55.6295, "lng": 12.605}
+MOTORWAY_EAST = {"lat": 55.6305, "lng": 12.640}
 
 ROUTES_API_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 
@@ -81,22 +83,29 @@ async def generate_route(
     Target: 25-35 min round trip.
     """
     if include_motorway:
-        # 1 villa → motorway onramp → Tarnby rundkørsel → 1 villa → back
+        # 1 villa → motorway west (E20) → motorway east (E20) → Tarnby rundkørsel → 1 villa → back
         pre = await pick_spread_waypoints(1)
         post = await pick_spread_waypoints(1)
-        waypoints = pre + [MOTORWAY_ONRAMP, TAARNBY_RUNDKOERSEL] + post
+        villa_wps = pre + post
+        motorway_wps = [MOTORWAY_WEST, MOTORWAY_EAST, TAARNBY_RUNDKOERSEL]
+        waypoints = pre + [MOTORWAY_WEST, MOTORWAY_EAST, TAARNBY_RUNDKOERSEL] + post
     else:
         # 3 random villa waypoints creating a residential loop
-        waypoints = await pick_spread_waypoints(3)
+        villa_wps = await pick_spread_waypoints(3)
+        motorway_wps = []
+        waypoints = villa_wps
 
-    intermediate = [
-        {
+    intermediate = []
+    for wp in waypoints:
+        entry: dict = {
             "location": {
                 "latLng": {"latitude": wp["lat"], "longitude": wp["lng"]}
             }
         }
-        for wp in waypoints
-    ]
+        # Motorway waypoints are pass-through (via), not stops
+        if wp in motorway_wps:
+            entry["via"] = True
+        intermediate.append(entry)
 
     body = {
         "origin": {
@@ -123,29 +132,61 @@ async def generate_route(
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": settings.G_API_KEY,
-        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.legs.steps.navigationInstruction,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.localizedValues,routes.legs.steps.polyline,routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline",
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.legs.steps.navigationInstruction,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.localizedValues,routes.legs.steps.polyline,routes.legs.steps.speedReadingIntervals,routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline",
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(ROUTES_API_URL, json=body, headers=headers)
-        data = resp.json()
-
+    max_retries = 3 if include_motorway else 1
     routes = []
-    for i, route in enumerate(data.get("routes", [])):
-        duration_str = route.get("duration", "0s")
-        duration_seconds = int(duration_str.replace("s", ""))
-        duration_minutes = duration_seconds / 60
 
-        routes.append({
-            "index": i,
-            "duration_seconds": duration_seconds,
-            "duration_minutes": round(duration_minutes, 1),
-            "distance_meters": route.get("distanceMeters", 0),
-            "polyline": route.get("polyline", {}).get("encodedPolyline", ""),
-            "legs": route.get("legs", []),
-            "include_motorway": include_motorway,
-            "within_target": 25 <= duration_minutes <= 40,
-        })
+    for attempt in range(max_retries):
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(ROUTES_API_URL, json=body, headers=headers)
+            data = resp.json()
+
+        routes = []
+        for i, route in enumerate(data.get("routes", [])):
+            duration_str = route.get("duration", "0s")
+            duration_seconds = int(duration_str.replace("s", ""))
+            duration_minutes = duration_seconds / 60
+
+            routes.append({
+                "index": i,
+                "duration_seconds": duration_seconds,
+                "duration_minutes": round(duration_minutes, 1),
+                "distance_meters": route.get("distanceMeters", 0),
+                "polyline": route.get("polyline", {}).get("encodedPolyline", ""),
+                "legs": route.get("legs", []),
+                "include_motorway": include_motorway,
+                "within_target": 25 <= duration_minutes <= 40,
+            })
+
+        # Motorway validation: check speed reading intervals for >=110 km/h segment
+        if include_motorway and routes:
+            has_motorway_speed = False
+            for route in routes:
+                for leg in route.get("legs", []):
+                    for step in leg.get("steps", []):
+                        for sri in step.get("speedReadingIntervals", []):
+                            speed = sri.get("speed", "")
+                            if speed == "NORMAL" or speed == "FAST":
+                                has_motorway_speed = True
+                                break
+            if has_motorway_speed:
+                break
+            # Retry with different villa waypoints
+            if attempt < max_retries - 1:
+                pre = await pick_spread_waypoints(1)
+                post = await pick_spread_waypoints(1)
+                waypoints = pre + [MOTORWAY_WEST, MOTORWAY_EAST, TAARNBY_RUNDKOERSEL] + post
+                intermediate = []
+                for wp in waypoints:
+                    entry = {"location": {"latLng": {"latitude": wp["lat"], "longitude": wp["lng"]}}}
+                    if wp in [MOTORWAY_WEST, MOTORWAY_EAST, TAARNBY_RUNDKOERSEL]:
+                        entry["via"] = True
+                    intermediate.append(entry)
+                body["intermediates"] = intermediate
+        else:
+            break
 
     # Save to MongoDB
     if routes:

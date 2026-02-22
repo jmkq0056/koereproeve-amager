@@ -54,6 +54,14 @@ export interface Neighborhood {
   source: string;
 }
 
+export interface GoogleSpeedLimit {
+  placeId: string;
+  speedLimit: number;
+  units: string;
+  lat: number;
+  lng: number;
+}
+
 export interface Step {
   instruction: string;
   maneuver: string;

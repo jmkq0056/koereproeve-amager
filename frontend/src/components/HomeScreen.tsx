@@ -168,12 +168,14 @@ export default function HomeScreen({
           </button>
         </div>
 
-        {/* Saved Routes */}
-        {savedRoutes.length > 0 && (
-          <div className="bg-slate-800/80 rounded-2xl p-5 mb-4 border border-slate-700/50">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-              Gemte ruter ({savedRoutes.length})
-            </h2>
+        {/* Saved Routes — always visible */}
+        <div className="bg-slate-800/80 rounded-2xl p-5 mb-4 border border-slate-700/50">
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Gemte ruter {savedRoutes.length > 0 && `(${savedRoutes.length})`}
+          </h2>
+          {savedRoutes.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-3">Ingen gemte ruter endnu</p>
+          ) : (
             <div className="space-y-2">
               {savedRoutes.map((route, i) => (
                 <div
@@ -182,22 +184,29 @@ export default function HomeScreen({
                 >
                   <button
                     onClick={() => onLoadRoute(route)}
-                    className="flex-1 text-left flex items-center gap-2"
+                    className="flex-1 text-left"
                   >
-                    <IconClock />
-                    <span className="text-sm font-medium">
-                      {route.duration_minutes} min
-                    </span>
-                    <span className="text-slate-500 text-xs">|</span>
-                    <span className="text-sm text-slate-300">
-                      {(route.distance_meters / 1000).toFixed(1)} km
-                    </span>
-                    <span className={`text-xs ml-1 px-1.5 py-0.5 rounded ${route.include_motorway ? "bg-blue-500/20 text-blue-300" : "bg-slate-600 text-slate-300"}`}>
-                      {route.include_motorway ? "Motorvej" : "Uden"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <IconClock />
+                      <span className="text-sm font-medium">
+                        {route.duration_minutes} min
+                      </span>
+                      <span className="text-slate-500 text-xs">|</span>
+                      <span className="text-sm text-slate-300">
+                        {(route.distance_meters / 1000).toFixed(1)} km
+                      </span>
+                      <span className={`text-xs ml-1 px-1.5 py-0.5 rounded ${route.include_motorway ? "bg-blue-500/20 text-blue-300" : "bg-slate-600 text-slate-300"}`}>
+                        {route.include_motorway ? "Motorvej" : "Uden"}
+                      </span>
+                    </div>
+                    {(route as any).created_at && (
+                      <p className="text-[10px] text-slate-500 mt-1 ml-6">
+                        {new Date((route as any).created_at).toLocaleDateString("da-DK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    )}
                   </button>
                   <button
-                    onClick={() => onDeleteRoute(i)}
+                    onClick={() => { if (confirm("Slet denne rute?")) onDeleteRoute(i); }}
                     className="text-slate-500 hover:text-red-400 p-2 transition-colors"
                   >
                     <IconTrash />
@@ -205,8 +214,8 @@ export default function HomeScreen({
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Villa Areas */}
         <div className="bg-slate-800/80 rounded-2xl p-5 mb-4 border border-slate-700/50">
@@ -289,12 +298,19 @@ export default function HomeScreen({
           </div>
 
           {/* Speed limit legend */}
-          <div className="border-t border-slate-700/50 pt-3">
+          <div className="border-t border-slate-700/50 pt-3 space-y-2.5">
             <div className="flex items-center gap-2.5">
               <span className="w-7 h-7 rounded-full bg-white border-[3px] border-red-600 shrink-0 flex items-center justify-center text-[10px] font-bold text-black shadow-sm">
                 50
               </span>
-              <span className="text-slate-300 text-sm">Fartskilt (rød ring med tal)</span>
+              <span className="text-slate-300 text-sm">C55 Fartskilt (50+ km/t)</span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-9 rounded bg-blue-600 border-2 border-white shrink-0 flex flex-col items-center justify-center shadow-sm">
+                <span className="text-[10px] font-bold text-white leading-none">30</span>
+                <span className="text-[6px] font-semibold text-white leading-none mt-0.5">Zone</span>
+              </span>
+              <span className="text-slate-300 text-sm">E53 Zoneskilt (30-40 km/t)</span>
             </div>
           </div>
         </div>

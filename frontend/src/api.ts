@@ -45,3 +45,8 @@ export async function fetchVillaAreas(lat?: number, lng?: number, radius?: numbe
   });
   return data;
 }
+
+export async function fetchGoogleSpeedLimits() {
+  const { data } = await api.get("/overpass/google-speed-limits");
+  return data;
+}
