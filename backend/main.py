@@ -52,11 +52,11 @@ async def verify_tool():
 
 @app.get("/orientation")
 async def orientation_app():
-    path = os.path.join(os.path.dirname(__file__), "..", "orientation", "index.html")
+    path = os.path.join(os.path.dirname(__file__), "static", "orientation", "index.html")
     return FileResponse(os.path.abspath(path), media_type="text/html")
 
 # Serve orientation assets (mirror images etc.)
-_orient_assets = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "orientation", "assets"))
+_orient_assets = os.path.join(os.path.dirname(__file__), "static", "orientation", "assets")
 if os.path.isdir(_orient_assets):
     app.mount("/assets", StaticFiles(directory=_orient_assets), name="orientation-assets")
 
