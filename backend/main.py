@@ -42,12 +42,23 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import os
 
 @app.get("/verify")
 async def verify_tool():
     path = os.path.join(os.path.dirname(__file__), "..", "tools", "verify_hojre.html")
     return FileResponse(os.path.abspath(path), media_type="text/html")
+
+@app.get("/orientation")
+async def orientation_app():
+    path = os.path.join(os.path.dirname(__file__), "..", "orientation", "index.html")
+    return FileResponse(os.path.abspath(path), media_type="text/html")
+
+# Serve orientation assets (mirror images etc.)
+_orient_assets = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "orientation", "assets"))
+if os.path.isdir(_orient_assets):
+    app.mount("/assets", StaticFiles(directory=_orient_assets), name="orientation-assets")
 
 app.include_router(routes_router, prefix="/api/routes", tags=["routes"])
 app.include_router(villa_router, prefix="/api/villa", tags=["villa"])

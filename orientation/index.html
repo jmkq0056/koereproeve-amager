@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Køreprøve Orientering</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0f172a; --surface: #1e293b; --surface2: #334155; --border: #475569;
+      --text: #f1f5f9; --dim: #94a3b8; --green: #22c55e; --orange: #f59e0b;
+      --red: #ef4444; --blue: #3b82f6; --cyan: #06b6d4;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; min-height: 100vh; overflow-x: hidden; }
+    .screen { display: none; min-height: 100vh; padding: 20px; }
+    .screen.active { display: flex; flex-direction: column; align-items: center; }
+
+    /* MENU */
+    .menu-title { font-size: 2.2rem; font-weight: 800; margin-top: 40px; text-align: center; }
+    .menu-sub { color: var(--dim); margin: 8px 0 30px; text-align: center; font-size: 1.1rem; }
+    .mode-buttons { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; justify-content: center; }
+    .mode-btn { padding: 14px 28px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface); color: var(--text); font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .mode-btn:hover { border-color: var(--cyan); background: var(--surface2); transform: translateY(-2px); }
+    .mode-btn.accent { border-color: var(--cyan); background: rgba(6,182,212,0.15); }
+    .maneuver-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; max-width: 700px; width: 100%; }
+    .m-card { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.2s; text-align: center; }
+    .m-card:hover { border-color: var(--blue); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(59,130,246,0.2); }
+    .m-card .icon { font-size: 2rem; margin-bottom: 6px; }
+    .m-card .name { font-weight: 700; font-size: 0.95rem; }
+    .m-card .name-en { color: var(--dim); font-size: 0.8rem; }
+    .m-card .steps { color: var(--cyan); font-size: 0.75rem; margin-top: 4px; }
+
+    /* LOADING */
+    .loading-box { background: var(--surface); border-radius: 16px; padding: 40px; text-align: center; margin-top: 80px; }
+    .loading-box h2 { margin-bottom: 12px; }
+    .spinner { width: 40px; height: 40px; border: 4px solid var(--border); border-top-color: var(--cyan); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 16px auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* CALIBRATION */
+    .cal-container { text-align: center; margin-top: 40px; }
+    .cal-container h2 { font-size: 1.8rem; margin-bottom: 8px; }
+    .cal-container p { color: var(--dim); margin-bottom: 20px; }
+    .cal-video-wrap { position: relative; width: 400px; height: 300px; border-radius: 16px; overflow: hidden; border: 3px solid var(--border); margin: 0 auto 20px; }
+    .cal-video-wrap video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    .cal-countdown { font-size: 4rem; font-weight: 900; color: var(--cyan); }
+    .cal-status { font-size: 1.1rem; color: var(--dim); margin-top: 8px; }
+
+    /* PRACTICE */
+    .practice-layout { width: 100%; max-width: 800px; position: relative; }
+    .practice-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .practice-title { font-size: 1.3rem; font-weight: 700; }
+    .cam-small { width: 160px; height: 120px; border-radius: 10px; overflow: hidden; border: 2px solid var(--border); position: relative; }
+    .cam-small video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    .cam-small .pose-label { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); color: var(--cyan); font-size: 0.7rem; text-align: center; padding: 2px; font-weight: 600; }
+    .svg-area { display: flex; justify-content: center; margin-bottom: 16px; }
+    .svg-area svg { border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .instruction-panel { background: var(--surface); border-radius: 14px; padding: 20px 24px; border: 2px solid var(--border); transition: border-color 0.3s, box-shadow 0.3s; }
+    .instruction-panel.green { border-color: var(--green); box-shadow: 0 0 20px rgba(34,197,94,0.3); }
+    .instruction-panel.orange { border-color: var(--orange); box-shadow: 0 0 20px rgba(245,158,11,0.2); }
+    .instruction-panel.red { border-color: var(--red); box-shadow: 0 0 20px rgba(239,68,68,0.3); animation: shake 0.3s; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+    .phase-label { color: var(--cyan); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    .instr-row { display: flex; align-items: center; gap: 16px; }
+    .mirror-icon { width: 56px; height: 56px; object-fit: contain; flex-shrink: 0; }
+    .mirror-icon.flip { transform: scaleX(-1); }
+    .shoulder-icon { width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; flex-shrink: 0; }
+    .instr-text { font-size: 1.5rem; font-weight: 700; }
+    .instr-en { color: var(--dim); font-size: 0.95rem; }
+    .timer-bar { height: 6px; background: var(--surface2); border-radius: 3px; margin-top: 12px; overflow: hidden; }
+    .timer-fill { height: 100%; border-radius: 3px; transition: width 0.1s; background: var(--green); }
+    .timer-fill.orange { background: var(--orange); }
+    .timer-fill.red { background: var(--red); }
+    .progress-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .step-count { color: var(--dim); font-size: 0.85rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); }
+    .dot.done { background: var(--green); border-color: var(--green); }
+    .dot.current { background: var(--cyan); border-color: var(--cyan); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .detection-label { text-align: center; margin-top: 10px; font-size: 0.85rem; color: var(--dim); }
+    .prep-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15,23,42,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; flex-direction: column; }
+    .prep-number { font-size: 8rem; font-weight: 900; color: var(--cyan); animation: popIn 0.4s; }
+    @keyframes popIn { from{transform:scale(0.5);opacity:0} to{transform:scale(1);opacity:1} }
+    .prep-text { font-size: 1.2rem; color: var(--dim); margin-top: 8px; }
+    .restart-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(239,68,68,0.15); display: flex; align-items: center; justify-content: center; z-index: 100; flex-direction: column; animation: fadeIn 0.3s; }
+    .restart-text { font-size: 2rem; font-weight: 800; color: var(--red); }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+    /* RESULTS */
+    .results-card { background: var(--surface); border-radius: 16px; padding: 32px; max-width: 500px; width: 100%; margin-top: 40px; text-align: center; }
+    .results-card h2 { font-size: 1.6rem; margin-bottom: 4px; }
+    .results-card .sub { color: var(--dim); margin-bottom: 20px; }
+    .score-big { font-size: 4rem; font-weight: 900; margin: 12px 0; }
+    .score-big.green { color: var(--green); }
+    .score-big.orange { color: var(--orange); }
+    .score-big.red { color: var(--red); }
+    .stars { font-size: 2rem; margin-bottom: 16px; }
+    .step-results { text-align: left; margin: 16px 0; }
+    .step-result-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    .step-result-row .time { color: var(--cyan); font-weight: 600; }
+    .btn-row { display: flex; gap: 10px; margin-top: 20px; justify-content: center; }
+    .btn { padding: 12px 24px; border-radius: 10px; border: none; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: var(--cyan); color: var(--bg); }
+    .btn-primary:hover { background: #22d3ee; transform: translateY(-1px); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--border); }
+
+    /* DEBUG */
+    .debug-panel { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.85); color: #0f0; font-family: monospace; font-size: 12px; padding: 10px; border-radius: 8px; z-index: 200; display: none; min-width: 200px; }
+    .debug-panel.show { display: block; }
+
+    /* KEYBOARD HINT */
+    .kb-hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; font-size: 0.75rem; color: var(--dim); z-index: 50; white-space: nowrap; }
+    .kb-hint kbd { background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-family: monospace; }
+
+    /* MOBILE */
+    @media (max-width: 600px) {
+      .screen { padding: 12px; min-height: 100dvh; }
+      .menu-title { font-size: 1.5rem; margin-top: 20px; }
+      .menu-sub { font-size: 0.9rem; margin: 4px 0 16px; }
+      .mode-btn { padding: 10px 18px; font-size: 0.9rem; }
+      .maneuver-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .m-card { padding: 12px 8px; }
+      .m-card .icon { font-size: 1.5rem; margin-bottom: 4px; }
+      .m-card .name { font-size: 0.85rem; }
+      .cal-video-wrap { width: 100%; max-width: 320px; height: 240px; }
+      .cal-countdown { font-size: 3rem; }
+      .practice-header { flex-direction: column; gap: 8px; align-items: flex-start; }
+      .practice-title { font-size: 1.1rem; }
+      .cam-small { width: 120px; height: 90px; align-self: center; }
+      .instruction-panel { padding: 14px 16px; }
+      .instr-text { font-size: 1.2rem; }
+      .instr-en { font-size: 0.8rem; }
+      .mirror-icon, .shoulder-icon { width: 44px; height: 44px; font-size: 2rem; }
+      .results-card { padding: 20px 16px; margin-top: 20px; }
+      .score-big { font-size: 3rem; }
+      .btn { padding: 10px 18px; font-size: 0.9rem; }
+      .btn-row { flex-wrap: wrap; }
+      .kb-hint { display: none; }
+      .loading-box { padding: 24px 16px; margin-top: 40px; }
+      .prep-number { font-size: 5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- MENU SCREEN -->
+  <div id="screen-menu" class="screen active">
+    <div class="menu-title">Køreprøve Orientering</div>
+    <div class="menu-sub">Øv din spejl- og skulderorientering / Practice your mirror & shoulder checks</div>
+    <div class="mode-buttons">
+      <button class="mode-btn accent" onclick="startRandom()">Tilfældig / Random</button>
+      <button class="mode-btn" onclick="startAll()">Alle i rækkefølge / All Sequential</button>
+    </div>
+    <div class="maneuver-grid" id="maneuver-grid"></div>
+  </div>
+
+  <!-- LOADING SCREEN -->
+  <div id="screen-loading" class="screen">
+    <div class="loading-box">
+      <h2>Gør klar...</h2>
+      <div class="spinner"></div>
+      <p id="loading-status">Starter kamera...</p>
+    </div>
+  </div>
+
+  <!-- CALIBRATION SCREEN -->
+  <div id="screen-calibration" class="screen">
+    <div class="cal-container">
+      <h2>Kalibrering</h2>
+      <p>Kig lige frem mod kameraet / Look straight at the camera</p>
+      <div class="cal-video-wrap">
+        <video id="cal-video" autoplay playsinline></video>
+      </div>
+      <div class="cal-countdown" id="cal-countdown">3</div>
+      <div class="cal-status" id="cal-status">Hold stille... / Hold still...</div>
+    </div>
+  </div>
+
+  <!-- PRACTICE SCREEN -->
+  <div id="screen-practice" class="screen">
+    <div class="practice-layout">
+      <div class="practice-header">
+        <div class="practice-title" id="practice-title"></div>
+        <div class="cam-small">
+          <video id="practice-video" autoplay playsinline></video>
+          <div class="pose-label" id="pose-label">--</div>
+        </div>
+      </div>
+      <div class="svg-area" id="svg-area"></div>
+      <div class="instruction-panel" id="instr-panel">
+        <div class="phase-label" id="phase-label"></div>
+        <div class="instr-row">
+          <div id="instr-icon"></div>
+          <div>
+            <div class="instr-text" id="instr-text"></div>
+            <div class="instr-en" id="instr-en"></div>
+          </div>
+        </div>
+        <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
+        <div class="progress-row" id="progress-row"></div>
+        <div class="detection-label" id="detection-label"></div>
+      </div>
+    </div>
+    <div class="kb-hint">Tastatur: <kbd>I</kbd> Spejl <kbd>L</kbd> Venstre <kbd>R</kbd> Højre <kbd>Q</kbd> V.skulder <kbd>E</kbd> H.skulder <kbd>B</kbd> Bagud <kbd>Space</kbd> Handling <kbd>D</kbd> Debug</div>
+  </div>
+
+  <!-- RESULTS SCREEN -->
+  <div id="screen-results" class="screen">
+    <div class="results-card" id="results-card"></div>
+  </div>
+
+  <!-- OVERLAYS -->
+  <div id="prep-overlay" class="prep-overlay" style="display:none">
+    <div class="prep-number" id="prep-number">3</div>
+    <div class="prep-text" id="prep-text">Gør dig klar...</div>
+  </div>
+  <div id="restart-overlay" class="restart-overlay" style="display:none">
+    <div class="restart-text">Forkert retning! Starter forfra...</div>
+  </div>
+
+  <!-- DEBUG -->
+  <div class="debug-panel" id="debug-panel">
+    <div>Yaw: <span id="dbg-yaw">0</span>°</div>
+    <div>Pitch: <span id="dbg-pitch">0</span>°</div>
+    <div>Detected: <span id="dbg-det">--</span></div>
+    <div>Target: <span id="dbg-target">--</span></div>
+    <div>Cal offset: <span id="dbg-cal">0, 0</span></div>
+  </div>
+
+  <script type="module">
+    // ===================== MANEUVER DATA =====================
+    const MANEUVERS = [
+      {
+        id: 'left_turn', name: 'Venstresving', nameEn: 'Left Turn', icon: '↰',
+        steps: [
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: 'Før blink' },
+          { text: 'Venstre sidespejl', en: 'Left mirror', target: 'left_mirror', icon: 'side-left', phase: 'Før blink' },
+          { text: 'Venstre skulder', en: 'Left shoulder check', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Før blink' },
+          { text: 'BLINK VENSTRE', en: 'Signal left', target: 'action', icon: 'signal-left', phase: 'Blink' },
+          { text: 'Venstre skulder', en: 'Left shoulder → TURN!', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Drej' },
+        ]
+      },
+      {
+        id: 'right_turn', name: 'Højresving', nameEn: 'Right Turn', icon: '↱',
+        steps: [
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: 'Før blink' },
+          { text: 'Højre sidespejl', en: 'Right mirror', target: 'right_mirror', icon: 'side-right', phase: 'Før blink' },
+          { text: 'Højre skulder', en: 'Right shoulder check', target: 'right_shoulder', icon: 'shoulder-right', phase: 'Før blink' },
+          { text: 'BLINK HØJRE', en: 'Signal right', target: 'action', icon: 'signal-right', phase: 'Blink' },
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: 'Før drejning' },
+          { text: 'Højre sidespejl', en: 'Right mirror', target: 'right_mirror', icon: 'side-right', phase: 'Før drejning' },
+          { text: 'Højre skulder', en: 'Right shoulder (cyclists!)', target: 'right_shoulder', icon: 'shoulder-right', phase: 'Før drejning' },
+          { text: 'Tjek cyklister → DREJ!', en: 'Check cyclists → TURN!', target: 'action', icon: 'turn', phase: 'Drej' },
+        ]
+      },
+      {
+        id: 'move_off_right', name: 'Igangsætning fra højre', nameEn: 'Moving Off (Right Curb)', icon: '⇐',
+        steps: [
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: 'Orientering' },
+          { text: 'Venstre sidespejl', en: 'Left mirror', target: 'left_mirror', icon: 'side-left', phase: 'Orientering' },
+          { text: 'Venstre skulder', en: 'Left shoulder check', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Orientering' },
+          { text: 'BLINK VENSTRE', en: 'Signal left', target: 'action', icon: 'signal-left', phase: 'Blink' },
+          { text: 'KØR UD!', en: 'Move out!', target: 'action', icon: 'go', phase: 'Kør' },
+        ]
+      },
+      {
+        id: 'move_off_left', name: 'Igangsætning fra venstre', nameEn: 'Moving Off (Left Curb)', icon: '⇒',
+        steps: [
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: 'Orientering' },
+          { text: 'Højre sidespejl', en: 'Right mirror', target: 'right_mirror', icon: 'side-right', phase: 'Orientering' },
+          { text: 'Højre skulder', en: 'Right shoulder check', target: 'right_shoulder', icon: 'shoulder-right', phase: 'Orientering' },
+          { text: 'BLINK HØJRE', en: 'Signal right', target: 'action', icon: 'signal-right', phase: 'Blink' },
+          { text: 'KØR UD!', en: 'Move out!', target: 'action', icon: 'go', phase: 'Kør' },
+        ]
+      },
+      {
+        id: 'three_point', name: 'Trepunktsvending', nameEn: 'Three-Point Turn', icon: '⟳',
+        steps: [
+          // Phase 1: Forward toward curb - right shoulder FIRST (close danger zone)
+          { text: 'Højre skulder', en: 'Right shoulder (close danger)', target: 'right_shoulder', icon: 'shoulder-right', phase: '1. Fremad' },
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: '1. Fremad' },
+          { text: 'Venstre sidespejl', en: 'Left mirror', target: 'left_mirror', icon: 'side-left', phase: '1. Fremad' },
+          { text: 'Venstre skulder', en: 'Left shoulder check', target: 'left_shoulder', icon: 'shoulder-left', phase: '1. Fremad' },
+          { text: 'KØR FREM → STOP', en: 'FORWARD → STOP', target: 'action', icon: 'go', phase: '1. Fremad' },
+          // Phase 2: Reverse - right shoulder FIRST
+          { text: 'Højre skulder', en: 'Right shoulder (close danger)', target: 'right_shoulder', icon: 'shoulder-right', phase: '2. Bak' },
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: '2. Bak' },
+          { text: 'Venstre sidespejl', en: 'Left mirror', target: 'left_mirror', icon: 'side-left', phase: '2. Bak' },
+          { text: 'Venstre skulder', en: 'Left shoulder check', target: 'left_shoulder', icon: 'shoulder-left', phase: '2. Bak' },
+          { text: 'Kig bagud', en: 'Look through rear window', target: 'look_back', icon: 'back', phase: '2. Bak' },
+          { text: 'BAK → STOP', en: 'REVERSE → STOP', target: 'action', icon: 'go', phase: '2. Bak' },
+          // Phase 3: Drive out - right shoulder FIRST
+          { text: 'Højre skulder', en: 'Right shoulder (close danger)', target: 'right_shoulder', icon: 'shoulder-right', phase: '3. Kør ud' },
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: '3. Kør ud' },
+          { text: 'Venstre sidespejl', en: 'Left mirror', target: 'left_mirror', icon: 'side-left', phase: '3. Kør ud' },
+          { text: 'Venstre skulder', en: 'Left shoulder check', target: 'left_shoulder', icon: 'shoulder-left', phase: '3. Kør ud' },
+          { text: 'KØR FREMAD!', en: 'DRIVE FORWARD!', target: 'action', icon: 'go', phase: '3. Kør ud' },
+        ]
+      },
+      {
+        id: 'parallel_park', name: 'Parallelparkering', nameEn: 'Parallel Parking', icon: 'P',
+        steps: [
+          // Full sequence only ONCE at start
+          { text: 'Højre skulder', en: 'Right shoulder (close danger)', target: 'right_shoulder', icon: 'shoulder-right', phase: 'Før start' },
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: 'Før start' },
+          { text: 'Venstre sidespejl', en: 'Left mirror', target: 'left_mirror', icon: 'side-left', phase: 'Før start' },
+          { text: 'Venstre skulder', en: 'Left shoulder check', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Før start' },
+          { text: 'BLINK HØJRE', en: 'Signal right', target: 'action', icon: 'signal-right', phase: 'Blink' },
+          { text: 'Stop parallelt', en: 'Stop parallel', target: 'action', icon: 'go', phase: 'Stop' },
+          // Reversing - just left shoulder checks to ensure nothing coming
+          { text: 'Kig bagud', en: 'Look back', target: 'look_back', icon: 'back', phase: 'Bakning' },
+          { text: 'Venstre skulder', en: 'Left shoulder (traffic?)', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Bakning' },
+          { text: 'Kig bagud', en: 'Look back', target: 'look_back', icon: 'back', phase: 'Bakning' },
+          { text: 'Venstre skulder', en: 'Left shoulder (clear?)', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Bakning' },
+          { text: 'RET OP → STOP', en: 'STRAIGHTEN → STOP', target: 'action', icon: 'go', phase: 'Færdig' },
+        ]
+      },
+      {
+        id: 'reverse_corner', name: 'Bak rundt om hjørne', nameEn: 'Reverse Around Corner', icon: '↻',
+        steps: [
+          // Full sequence only ONCE at start
+          { text: 'Højre skulder', en: 'Right shoulder (close danger)', target: 'right_shoulder', icon: 'shoulder-right', phase: 'Før start' },
+          { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: 'Før start' },
+          { text: 'Venstre sidespejl', en: 'Left mirror', target: 'left_mirror', icon: 'side-left', phase: 'Før start' },
+          { text: 'Venstre skulder', en: 'Left shoulder check', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Før start' },
+          { text: 'BLINK HØJRE', en: 'Signal right', target: 'action', icon: 'signal-right', phase: 'Blink' },
+          // Reversing - look back + check left side
+          { text: 'Kig bagud', en: 'Look back', target: 'look_back', icon: 'back', phase: 'Under bakning' },
+          { text: 'Venstre skulder', en: 'Left shoulder (traffic?)', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Under bakning' },
+          { text: 'Kig bagud', en: 'Look back', target: 'look_back', icon: 'back', phase: 'Under bakning' },
+          { text: 'Venstre skulder', en: 'Left shoulder (clear?)', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Under bakning' },
+          { text: 'KØR FREMAD!', en: 'DRIVE FORWARD!', target: 'action', icon: 'go', phase: 'Kør ud' },
+        ]
+      },
+    ];
+
+    // ===================== STATE =====================
+    let state = {
+      screen: 'menu',
+      maneuverIndex: -1,
+      stepIndex: 0,
+      mode: 'single', // single, random, all
+      allQueue: [],
+      calibration: { yaw: 0, pitch: 0 },
+      calSamples: [],
+      correctStart: null,
+      wrongStart: null,
+      stepStartTime: null,
+      stepTimes: [],
+      restarts: 0,
+      paused: false,
+      cameraReady: false,
+      faceMeshReady: false,
+      latestPose: { yaw: 0, pitch: 0 },
+      latestDetected: 'none',
+    };
+
+    let faceLandmarker = null;
+    let videoEl = null;
+    let audioCtx = null;
+    let detectionRunning = false;
+
+    const HOLD_MS = 200;      // quick glance confirms
+    const WRONG_MS = 4000;    // very forgiving before restart
+    const ACTION_MS = 800;    // quick text flash
+    const STEP_COOLDOWN = 400; // ms pause between steps so they don't bleed into each other
+
+    // ===================== AUDIO =====================
+    function getAudioCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+    function beep(freq, dur, type = 'sine', vol = 0.2) {
+      try {
+        const ctx = getAudioCtx();
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.frequency.value = freq; osc.type = type;
+        g.gain.setValueAtTime(vol, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+        osc.start(); osc.stop(ctx.currentTime + dur);
+      } catch(e) {}
+    }
+    function soundSuccess() { beep(700, 0.12); setTimeout(() => beep(1100, 0.12), 120); }
+    function soundFail() { beep(250, 0.3, 'square', 0.15); }
+    function soundTick() { beep(500, 0.04); }
+
+    // ===================== HEAD POSE =====================
+    function estimateHeadPose(landmarks) {
+      const nose = landmarks[4];
+      const leftEye = landmarks[33];
+      const rightEye = landmarks[263];
+      const chin = landmarks[152];
+      const forehead = landmarks[10];
+      const leftEar = landmarks[234];
+      const rightEar = landmarks[454];
+
+      const faceW = Math.abs(leftEye.x - rightEye.x);
+      const faceH = Math.abs(chin.y - forehead.y);
+      if (faceW < 0.01 || faceH < 0.01) return { yaw: 0, pitch: 0 };
+
+      // Yaw from nose deviation
+      const centerX = (leftEye.x + rightEye.x) / 2;
+      const noseDev = (nose.x - centerX) / faceW;
+      const yawFromNose = -noseDev * 75;
+
+      // Yaw from z-depth (more reliable at larger angles)
+      const zDiff = (rightEar.z || 0) - (leftEar.z || 0);
+      const yawFromZ = zDiff * 200;
+
+      const yaw = yawFromNose * 0.5 + yawFromZ * 0.5;
+
+      // Pitch from nose-to-eye vertical ratio
+      const eyeMidY = (leftEye.y + rightEye.y) / 2;
+      const noseRatio = (nose.y - eyeMidY) / faceH;
+      const pitch = (noseRatio - 0.2) * 130;
+
+      return { yaw, pitch };
+    }
+
+    function classifyOrientation(yaw, pitch) {
+      const ay = Math.abs(yaw);
+      // Interior mirror FIRST: looking up takes priority
+      if (pitch < -3 && ay < 22) return 'interior_mirror';
+      // Look back (extreme turn)
+      if (ay > 40) return 'look_back';
+      // Shoulder checks: >16° (cooldown prevents bleed from mirror)
+      if (yaw < -16) return 'left_shoulder';
+      if (yaw > 16) return 'right_shoulder';
+      // Side mirrors: 6°-16°
+      if (yaw < -6) return 'left_mirror';
+      if (yaw > 6) return 'right_mirror';
+      // Straight
+      return 'straight';
+    }
+
+    // Mirror and shoulder are DISTINCT - no cross-matching
+    // Only: shoulder counts for mirror target (looked further = OK)
+    // But mirror does NOT count for shoulder target (didn't look far enough)
+    function orientationMatches(detected, target) {
+      if (detected === target) return true;
+      // Looked FURTHER than needed = OK
+      if (target === 'left_mirror' && detected === 'left_shoulder') return true;
+      if (target === 'right_mirror' && detected === 'right_shoulder') return true;
+      // Look back accepts any big turn
+      if (target === 'look_back' && (detected === 'left_shoulder' || detected === 'right_shoulder')) return true;
+      return false;
+    }
+
+    function isWrongDirection(detected, target) {
+      const opp = {
+        left_mirror: ['right_mirror', 'right_shoulder'],
+        right_mirror: ['left_mirror', 'left_shoulder'],
+        left_shoulder: ['right_mirror', 'right_shoulder'],
+        right_shoulder: ['left_mirror', 'left_shoulder'],
+        interior_mirror: [],
+        look_back: [],
+      };
+      return (opp[target] || []).includes(detected);
+    }
+
+    // ===================== SVG DRAWINGS =====================
+    function mirrorDots(cx, cy, w, h, active) {
+      const items = [
+        { id: 'interior_mirror', x: cx - 7, y: cy - h/2 - 14, w: 14, h: 7 },
+        { id: 'left_mirror', x: cx - w/2 - 13, y: cy - h/2 + 8, w: 9, h: 6 },
+        { id: 'right_mirror', x: cx + w/2 + 4, y: cy - h/2 + 8, w: 9, h: 6 },
+      ];
+      const arrows = [
+        { id: 'left_shoulder', x1: cx - w/2 + 2, y1: cy + h/2 - 4, x2: cx - w/2 - 20, y2: cy + h/2 + 16 },
+        { id: 'right_shoulder', x1: cx + w/2 - 2, y1: cy + h/2 - 4, x2: cx + w/2 + 20, y2: cy + h/2 + 16 },
+        { id: 'look_back', x1: cx, y1: cy + h/2, x2: cx, y2: cy + h/2 + 24 },
+      ];
+      let s = '';
+      items.forEach(i => {
+        const on = i.id === active;
+        s += `<rect x="${i.x}" y="${i.y}" width="${i.w}" height="${i.h}" rx="2" fill="${on ? '#22c55e' : '#94a3b8'}" opacity="${on ? 1 : 0.3}" ${on ? 'filter="url(#glow)"' : ''}/>`;
+      });
+      arrows.forEach(a => {
+        const on = a.id === active;
+        s += `<line x1="${a.x1}" y1="${a.y1}" x2="${a.x2}" y2="${a.y2}" stroke="${on ? '#22c55e' : '#94a3b8'}" stroke-width="${on ? 2.5 : 1.2}" opacity="${on ? 1 : 0.25}" marker-end="url(#ah${on ? 'g' : ''})"/>`;
+      });
+      return s;
+    }
+
+    function svgDefs() {
+      return `<defs>
+        <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#94a3b8"/></marker>
+        <marker id="ahg" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#22c55e"/></marker>
+        <marker id="aht" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#f59e0b"/></marker>
+        <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>`;
+    }
+
+    function svgCar(x, y, w, h, color = '#4488ff', rot = 0) {
+      const cx = x + w/2, cy = y + h/2;
+      const t = rot ? ` transform="rotate(${rot},${cx},${cy})"` : '';
+      return `<g${t}><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" fill="${color}"/><rect x="${x+3}" y="${y+3}" width="${w-6}" height="${h*0.3}" rx="3" fill="${color === '#4488ff' ? '#88bbff' : '#bbb'}" opacity="0.6"/></g>`;
+    }
+
+    function svgRoadV(x, w, h, startY = 0) {
+      return `<rect x="${x}" y="${startY}" width="${w}" height="${h}" fill="#666"/>
+        <line x1="${x+w/2}" y1="${startY}" x2="${x+w/2}" y2="${startY+h}" stroke="white" stroke-width="1.5" stroke-dasharray="8,8" opacity="0.6"/>`;
+    }
+
+    function svgRoadH(y, h, w, startX = 0) {
+      return `<rect x="${startX}" y="${y}" width="${w}" height="${h}" fill="#666"/>
+        <line x1="${startX}" y1="${y+h/2}" x2="${startX+w}" y2="${y+h/2}" stroke="white" stroke-width="1.5" stroke-dasharray="8,8" opacity="0.6"/>`;
+    }
+
+    function svgTree(x, y) {
+      return `<circle cx="${x}" cy="${y}" r="10" fill="#2d7a2d"/><circle cx="${x}" cy="${y}" r="6" fill="#3a9a3a"/>`;
+    }
+
+    function generateSVG(manId, active) {
+      const W = 320, H = 400;
+      let content = '';
+      const bg = `<rect width="${W}" height="${H}" fill="#3a6b35" rx="10"/>`;
+
+      switch (manId) {
+        case 'left_turn': {
+          content = `
+            ${svgRoadV(120, 80, H)}
+            ${svgRoadH(160, 80, W)}
+            <rect x="120" y="160" width="80" height="80" fill="#666"/>
+            ${svgTree(50, 80)} ${svgTree(270, 80)} ${svgTree(50, 350)} ${svgTree(270, 350)}
+            ${svgCar(155, 290, 28, 50, '#4488ff')}
+            ${svgCar(127, 70, 28, 50, '#999')}
+            <path d="M 169,285 Q 169,200 90,200" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#aht)">
+              <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
+            </path>
+            <text x="70" y="145" fill="#f59e0b" font-size="11" font-weight="700" opacity="0.8">← DREJ</text>
+            ${mirrorDots(169, 315, 28, 50, active)}
+          `;
+          break;
+        }
+        case 'right_turn': {
+          content = `
+            ${svgRoadV(120, 80, H)}
+            ${svgRoadH(160, 80, W)}
+            <rect x="120" y="160" width="80" height="80" fill="#666"/>
+            <rect x="200" y="155" width="12" height="90" fill="#558855" opacity="0.6"/>
+            <text x="203" y="205" fill="#aaffaa" font-size="8" transform="rotate(90,206,200)">CYKEL</text>
+            ${svgTree(50, 80)} ${svgTree(270, 80)} ${svgTree(50, 350)}
+            ${svgCar(132, 290, 28, 50, '#4488ff')}
+            <path d="M 146,285 Q 146,200 230,200" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#aht)">
+              <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
+            </path>
+            <text x="225" y="145" fill="#f59e0b" font-size="11" font-weight="700" opacity="0.8">DREJ →</text>
+            ${mirrorDots(146, 315, 28, 50, active)}
+          `;
+          break;
+        }
+        case 'move_off_right': {
+          content = `
+            ${svgRoadV(80, 160, H)}
+            <rect x="228" y="0" width="12" height="${H}" fill="#888" rx="1"/>
+            ${svgCar(215, 200, 28, 50, '#4488ff')}
+            ${svgCar(115, 100, 28, 50, '#999')}
+            <path d="M 229,195 Q 200,170 155,150" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#aht)">
+              <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
+            </path>
+            <text x="90" y="190" fill="#94a3b8" font-size="10">Kantsten →</text>
+            ${svgTree(30, 100)} ${svgTree(30, 300)} ${svgTree(280, 100)} ${svgTree(280, 300)}
+            ${mirrorDots(229, 225, 28, 50, active)}
+          `;
+          break;
+        }
+        case 'move_off_left': {
+          content = `
+            ${svgRoadV(80, 160, H)}
+            <rect x="80" y="0" width="12" height="${H}" fill="#888" rx="1"/>
+            ${svgCar(77, 200, 28, 50, '#4488ff')}
+            ${svgCar(175, 100, 28, 50, '#999')}
+            <path d="M 91,195 Q 120,170 160,150" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#aht)">
+              <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
+            </path>
+            <text x="92" y="260" fill="#94a3b8" font-size="10">← Kantsten</text>
+            ${svgTree(30, 100)} ${svgTree(30, 300)} ${svgTree(280, 100)} ${svgTree(280, 300)}
+            ${mirrorDots(91, 225, 28, 50, active)}
+          `;
+          break;
+        }
+        case 'three_point': {
+          content = `
+            ${svgRoadH(170, 60, W)}
+            <rect x="0" y="165" width="${W}" height="5" fill="#888" rx="1"/>
+            <rect x="0" y="230" width="${W}" height="5" fill="#888" rx="1"/>
+            <rect x="20" y="60" width="50" height="80" rx="4" fill="#5a4a3a" opacity="0.5"/>
+            <rect x="250" y="60" width="50" height="80" rx="4" fill="#5a4a3a" opacity="0.5"/>
+            <rect x="20" y="270" width="50" height="80" rx="4" fill="#5a4a3a" opacity="0.5"/>
+            <rect x="250" y="270" width="50" height="80" rx="4" fill="#5a4a3a" opacity="0.5"/>
+            <text x="28" y="105" fill="#94a3b8" font-size="8">Hus</text>
+            <text x="258" y="105" fill="#94a3b8" font-size="8">Hus</text>
+            ${svgCar(100, 177, 24, 42, '#4488ff')}
+            <text x="90" y="175" fill="white" font-size="10" font-weight="700">1</text>
+            ${svgCar(200, 177, 24, 42, '#4488ff33', 180)}
+            <text x="195" y="175" fill="white" font-size="10" font-weight="700">2</text>
+            ${svgCar(145, 177, 24, 42, '#4488ff66')}
+            <text x="140" y="175" fill="white" font-size="10" font-weight="700">3</text>
+            <path d="M 112,177 Q 112,165 250,173" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.6"/>
+            <path d="M 212,220 Q 212,230 100,220" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.6"/>
+            <path d="M 157,177 L 157,165" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#ahg)" opacity="0.6"/>
+            ${mirrorDots(112, 198, 24, 42, active)}
+          `;
+          break;
+        }
+        case 'parallel_park': {
+          content = `
+            ${svgRoadV(60, 140, H)}
+            <rect x="190" y="0" width="12" height="${H}" fill="#888" rx="1"/>
+            ${svgCar(192, 70, 26, 48, '#999')}
+            ${svgCar(192, 260, 26, 48, '#999')}
+            <rect x="192" y="128" width="26" height="120" rx="3" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="4,3"/>
+            <text x="196" y="192" fill="#22c55e" font-size="9" opacity="0.8">PLADS</text>
+            ${svgCar(192, 20, 26, 48, '#4488ff')}
+            <path d="M 205,70 Q 210,130 205,160 Q 200,190 205,200" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#aht)">
+              <animate attributeName="stroke-dashoffset" from="8" to="0" dur="1.2s" repeatCount="indefinite"/>
+            </path>
+            ${svgTree(30, 80)} ${svgTree(30, 250)} ${svgTree(260, 150)}
+            ${mirrorDots(205, 44, 26, 48, active)}
+          `;
+          break;
+        }
+        case 'reverse_corner': {
+          content = `
+            ${svgRoadV(120, 80, 250)}
+            ${svgRoadH(240, 80, 200, 120)}
+            <rect x="120" y="240" width="80" height="80" fill="#666"/>
+            ${svgTree(50, 80)} ${svgTree(270, 150)} ${svgTree(50, 350)}
+            <rect x="40" y="245" width="70" height="70" rx="4" fill="#5a4a3a" opacity="0.4"/>
+            <text x="55" y="285" fill="#94a3b8" font-size="8">Hjørne</text>
+            ${svgCar(142, 100, 26, 48, '#4488ff')}
+            <path d="M 155,150 Q 155,250 155,280 Q 155,310 220,310" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#aht)">
+              <animate attributeName="stroke-dashoffset" from="8" to="0" dur="1.2s" repeatCount="indefinite"/>
+            </path>
+            <text x="230" y="305" fill="#f59e0b" font-size="10" font-weight="700" opacity="0.7">BAK →</text>
+            ${mirrorDots(155, 124, 26, 48, active)}
+          `;
+          break;
+        }
+      }
+
+      return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:320px;height:auto">${svgDefs()}${bg}${content}</svg>`;
+    }
+
+    // ===================== ICON HELPER =====================
+    function getIconHTML(iconType) {
+      switch (iconType) {
+        case 'rear': return `<img class="mirror-icon" src="assets/rear.png" alt="Interior mirror">`;
+        case 'side-right': return `<img class="mirror-icon" src="assets/side-mirror.png" alt="Right mirror">`;
+        case 'side-left': return `<img class="mirror-icon flip" src="assets/side-mirror.png" alt="Left mirror">`;
+        case 'shoulder-left': return `<div class="shoulder-icon">↩</div>`;
+        case 'shoulder-right': return `<div class="shoulder-icon">↪</div>`;
+        case 'back': return `<div class="shoulder-icon">⟲</div>`;
+        case 'signal-left': return `<div class="shoulder-icon" style="color:#f59e0b">⬅</div>`;
+        case 'signal-right': return `<div class="shoulder-icon" style="color:#f59e0b">➡</div>`;
+        case 'turn': return `<div class="shoulder-icon" style="color:#22c55e">🚗</div>`;
+        case 'go': return `<div class="shoulder-icon" style="color:#22c55e">▶</div>`;
+        default: return `<div class="shoulder-icon">👁</div>`;
+      }
+    }
+
+    // ===================== UI RENDERING =====================
+    function showScreen(name) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      const el = document.getElementById('screen-' + name);
+      if (el) el.classList.add('active');
+      state.screen = name;
+    }
+
+    function renderMenu() {
+      const grid = document.getElementById('maneuver-grid');
+      grid.innerHTML = MANEUVERS.map((m, i) => `
+        <div class="m-card" onclick="startSingle(${i})">
+          <div class="icon">${m.icon}</div>
+          <div class="name">${m.name}</div>
+          <div class="name-en">${m.nameEn}</div>
+          <div class="steps">${m.steps.length} trin</div>
+        </div>
+      `).join('');
+    }
+
+    function renderPractice() {
+      const man = MANEUVERS[state.maneuverIndex];
+      const step = man.steps[state.stepIndex];
+      document.getElementById('practice-title').textContent = `${man.icon} ${man.name}`;
+      document.getElementById('svg-area').innerHTML = generateSVG(man.id, step.target);
+      document.getElementById('phase-label').textContent = step.phase || '';
+      document.getElementById('instr-icon').innerHTML = getIconHTML(step.icon);
+      document.getElementById('instr-text').textContent = step.text;
+      document.getElementById('instr-en').textContent = step.en;
+      document.getElementById('timer-fill').style.width = '0%';
+      document.getElementById('timer-fill').className = 'timer-fill';
+
+      // Progress dots
+      const dots = man.steps.map((s, i) => {
+        if (i < state.stepIndex) return '<div class="dot done"></div>';
+        if (i === state.stepIndex) return '<div class="dot current"></div>';
+        return '<div class="dot"></div>';
+      }).join('');
+      document.getElementById('progress-row').innerHTML = `<span class="step-count">Trin ${state.stepIndex + 1}/${man.steps.length}</span>${dots}`;
+      document.getElementById('detection-label').textContent = '';
+      document.getElementById('instr-panel').className = 'instruction-panel';
+    }
+
+    function renderResults() {
+      const man = MANEUVERS[state.maneuverIndex];
+      const totalTime = state.stepTimes.reduce((a, b) => a + b, 0);
+      const avgTime = state.stepTimes.length ? totalTime / state.stepTimes.length : 0;
+      const detectionSteps = man.steps.filter(s => s.target !== 'action');
+      const score = Math.max(0, Math.min(100, Math.round(100 - (avgTime - 1) * 20 - state.restarts * 15)));
+      const stars = score >= 90 ? 5 : score >= 75 ? 4 : score >= 60 ? 3 : score >= 40 ? 2 : 1;
+      const scoreClass = score >= 70 ? 'green' : score >= 40 ? 'orange' : 'red';
+
+      let stepRows = '';
+      let timeIdx = 0;
+      man.steps.forEach((s, i) => {
+        if (s.target !== 'action') {
+          const t = state.stepTimes[timeIdx] || 0;
+          const tClass = t < 1.5 ? 'style="color:#22c55e"' : t < 3 ? 'style="color:#f59e0b"' : 'style="color:#ef4444"';
+          stepRows += `<div class="step-result-row"><span>${s.text}</span><span class="time" ${tClass}>${t.toFixed(1)}s</span></div>`;
+          timeIdx++;
+        }
+      });
+
+      document.getElementById('results-card').innerHTML = `
+        <h2>${man.icon} ${man.name}</h2>
+        <div class="sub">${man.nameEn}</div>
+        <div class="score-big ${scoreClass}">${score}%</div>
+        <div class="stars">${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}</div>
+        ${state.restarts > 0 ? `<div style="color:var(--red);margin-bottom:8px">Genstarter: ${state.restarts}</div>` : ''}
+        <div class="step-results">${stepRows}</div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="goMenu()">Menu</button>
+          <button class="btn btn-secondary" onclick="retryManeuver()">Prøv igen</button>
+          ${state.mode === 'all' && state.allQueue.length > 0 ? '<button class="btn btn-primary" onclick="nextInQueue()">Næste →</button>' : ''}
+          ${state.mode !== 'all' ? '<button class="btn btn-primary" onclick="startRandom()">Tilfældig</button>' : ''}
+        </div>
+      `;
+    }
+
+    // ===================== CAMERA & MEDIAPIPE =====================
+    async function initSystem() {
+      showScreen('loading');
+
+      // Step 1: Camera
+      let stream = null;
+      try {
+        document.getElementById('loading-status').textContent = '1/3 Starter kamera...';
+        // Try simple constraints first (most compatible)
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      } catch (camErr) {
+        console.error('Camera error:', camErr);
+        let hint = '';
+        if (camErr.name === 'NotFoundError' || camErr.message.includes('not found')) {
+          hint = '<b>Kamera ikke fundet.</b><br>macOS: Systemindstillinger → Anonymitet & Sikkerhed → Kamera → Tillad Chrome/Firefox.<br>Eller: luk andre apps der bruger kameraet.';
+        } else if (camErr.name === 'NotAllowedError') {
+          hint = '<b>Kamera-adgang nægtet.</b><br>Klik på kamera-ikonet i adresselinjen og tillad adgang.';
+        } else {
+          hint = `Kamera-fejl: ${camErr.message}`;
+        }
+        document.getElementById('loading-status').innerHTML = `
+          <span style="color:var(--red)">${hint}</span><br><br>
+          <span style="color:var(--dim)">Du kan stadig øve med tastatur-genveje!</span>
+          <br><br><button class="btn btn-primary" onclick="startWithKeyboardOnly()">Fortsæt kun med tastatur</button>
+        `;
+        return;
+      }
+
+      // Camera OK - attach to video elements
+      const calVid = document.getElementById('cal-video');
+      const pracVid = document.getElementById('practice-video');
+      calVid.srcObject = stream;
+      pracVid.srcObject = stream;
+      videoEl = calVid;
+      state.cameraReady = true;
+
+      // Step 2: Load MediaPipe
+      try {
+        document.getElementById('loading-status').textContent = '2/3 Indlæser AI ansigtsmodel (~4MB)...';
+
+        const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+        const { FaceLandmarker, FilesetResolver } = vision;
+
+        document.getElementById('loading-status').textContent = '2/3 Forbereder WASM...';
+        const filesetResolver = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+
+        document.getElementById('loading-status').textContent = '3/3 Opretter ansigts-detektor...';
+        faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+            delegate: "GPU"
+          },
+          outputFaceBlendshapes: false,
+          outputFacialTransformationMatrixes: true,
+          runningMode: "VIDEO",
+          numFaces: 1
+        });
+
+        state.faceMeshReady = true;
+        startDetectionLoop();
+
+        document.getElementById('loading-status').textContent = 'Klar!';
+        setTimeout(() => startCalibration(), 500);
+      } catch (mpErr) {
+        console.error('MediaPipe error:', mpErr);
+        document.getElementById('loading-status').innerHTML = `
+          <span style="color:var(--orange)">Kamera virker, men AI-model fejlede: ${mpErr.message}</span><br><br>
+          <span style="color:var(--dim)">Du kan stadig øve med tastatur-genveje!</span>
+          <br><br><button class="btn btn-primary" onclick="startWithKeyboardOnly()">Fortsæt kun med tastatur</button>
+        `;
+      }
+    }
+
+    let faceLostTime = null;
+    let lastDetectTime = 0;
+
+    function startDetectionLoop() {
+      if (detectionRunning) return;
+      detectionRunning = true;
+
+      function loop() {
+        if (!detectionRunning) return;
+        const now = performance.now();
+        // ~20 FPS detection
+        if (now - lastDetectTime > 50 && videoEl && faceLandmarker && videoEl.readyState >= 2) {
+          lastDetectTime = now;
+          try {
+            const results = faceLandmarker.detectForVideo(videoEl, now);
+            handleFaceResults(results);
+          } catch (e) { /* silently skip frame */ }
+        }
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+    }
+
+    function extractEulerAngles(data) {
+      // 4x4 column-major matrix → Euler angles (ZYX convention)
+      const m = Array.from(data);
+      const sy = Math.sqrt(m[0] * m[0] + m[1] * m[1]);
+      const singular = sy < 1e-6;
+      let pitch, yaw;
+      if (!singular) {
+        pitch = Math.atan2(m[6], m[10]);
+        yaw = Math.atan2(-m[2], sy);
+      } else {
+        pitch = Math.atan2(-m[9], m[5]);
+        yaw = Math.atan2(-m[2], sy);
+      }
+      return { yaw: yaw * 180 / Math.PI, pitch: pitch * 180 / Math.PI };
+    }
+
+    function handleFaceResults(results) {
+      if (!results.faceLandmarks || results.faceLandmarks.length === 0) {
+        faceLostTime = faceLostTime || Date.now();
+        state.latestDetected = 'face_lost';
+        updateDebug(state.latestPose.yaw, state.latestPose.pitch, 'LOST (turning)');
+        // STILL run detection - face lost while turning = shoulder check!
+        if (state.screen === 'practice' && !state.paused) {
+          processDetection();
+        }
+        return;
+      }
+      faceLostTime = null;
+
+      const landmarks = results.faceLandmarks[0];
+      let rawYaw, rawPitch;
+
+      // Try transformation matrix first (more accurate)
+      const matrix = results.facialTransformationMatrixes && results.facialTransformationMatrixes[0];
+      if (matrix && matrix.data) {
+        const angles = extractEulerAngles(matrix.data);
+        rawYaw = -angles.yaw;   // Negate: camera sees mirror image
+        rawPitch = angles.pitch;
+      } else {
+        // Fallback to landmark-based estimation
+        const pose = estimateHeadPose(landmarks);
+        rawYaw = -pose.yaw;     // Negate: camera sees mirror image
+        rawPitch = pose.pitch;
+      }
+
+      const yaw = rawYaw - state.calibration.yaw;
+      const pitch = rawPitch - state.calibration.pitch;
+
+      state.latestPose = { yaw, pitch };
+      state.latestDetected = classifyOrientation(yaw, pitch);
+
+      updateDebug(yaw, pitch, state.latestDetected);
+
+      if (state.screen === 'calibration') {
+        state.calSamples.push({ yaw: rawYaw, pitch: rawPitch });
+      }
+
+      if (state.screen === 'practice' && !state.paused) {
+        processDetection();
+      }
+    }
+
+    function updateDebug(yaw, pitch, det) {
+      document.getElementById('dbg-yaw').textContent = yaw.toFixed(1);
+      document.getElementById('dbg-pitch').textContent = pitch.toFixed(1);
+      document.getElementById('dbg-det').textContent = det;
+      const man = MANEUVERS[state.maneuverIndex];
+      if (man) {
+        const step = man.steps[state.stepIndex];
+        document.getElementById('dbg-target').textContent = step ? step.target : '--';
+      }
+      document.getElementById('dbg-cal').textContent = `${state.calibration.yaw.toFixed(1)}, ${state.calibration.pitch.toFixed(1)}`;
+      // Update small camera label
+      const label = document.getElementById('pose-label');
+      if (label) label.textContent = det.replace(/_/g, ' ').toUpperCase();
+    }
+
+    // ===================== CALIBRATION =====================
+    function startCalibration() {
+      showScreen('calibration');
+      state.calSamples = [];
+      let countdown = 3;
+      document.getElementById('cal-countdown').textContent = countdown;
+
+      const interval = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+          document.getElementById('cal-countdown').textContent = countdown;
+          soundTick();
+        } else {
+          clearInterval(interval);
+          finishCalibration();
+        }
+      }, 1000);
+    }
+
+    function finishCalibration() {
+      if (state.calSamples.length > 0) {
+        const avgYaw = state.calSamples.reduce((a, s) => a + s.yaw, 0) / state.calSamples.length;
+        const avgPitch = state.calSamples.reduce((a, s) => a + s.pitch, 0) / state.calSamples.length;
+        state.calibration = { yaw: avgYaw, pitch: avgPitch };
+      }
+      document.getElementById('cal-countdown').textContent = '✓';
+      document.getElementById('cal-status').textContent = 'Kalibrering fuldført!';
+      soundSuccess();
+
+      // Switch video source for practice screen
+      const pracVid = document.getElementById('practice-video');
+      // Ensure practice video is playing before switching
+      pracVid.play().catch(() => {});
+      videoEl = pracVid;
+
+      setTimeout(() => beginPractice(), 800);
+    }
+
+    // ===================== STEP ENGINE =====================
+    function beginPractice() {
+      state.stepIndex = 0;
+      state.stepTimes = [];
+      state.restarts = 0;
+      state.correctStart = null;
+      state.wrongStart = null;
+      state.stepStartTime = null;
+      state.paused = true;
+
+      showScreen('practice');
+      renderPractice();
+      showPrep();
+    }
+
+    function showPrep() {
+      // No countdown - go immediately, continuous flow
+      // But add brief cooldown so previous step doesn't bleed in
+      state.paused = true;
+      state.correctStart = null;
+      state.wrongStart = null;
+
+      setTimeout(() => {
+        state.paused = false;
+        state.stepStartTime = Date.now();
+        const man = MANEUVERS[state.maneuverIndex];
+        const step = man.steps[state.stepIndex];
+        if (step.target === 'action') {
+          runActionStep();
+        }
+      }, STEP_COOLDOWN);
+    }
+
+    function runActionStep() {
+      const fill = document.getElementById('timer-fill');
+      fill.className = 'timer-fill orange';
+      let elapsed = 0;
+      const iv = setInterval(() => {
+        elapsed += 50;
+        fill.style.width = (elapsed / ACTION_MS * 100) + '%';
+        if (elapsed >= ACTION_MS) {
+          clearInterval(iv);
+          advanceStep();
+        }
+      }, 50);
+    }
+
+    function processDetection() {
+      const man = MANEUVERS[state.maneuverIndex];
+      if (!man) return;
+      const step = man.steps[state.stepIndex];
+      if (!step || step.target === 'action') return;
+
+      const detected = state.latestDetected;
+      const now = Date.now();
+      const panel = document.getElementById('instr-panel');
+      const fill = document.getElementById('timer-fill');
+      const label = document.getElementById('detection-label');
+
+      // Face lost while turning = successful shoulder/look_back check (turned so far face disappeared)
+      const faceLost = faceLostTime && (now - faceLostTime > 200);
+      const lastYaw = state.latestPose.yaw;
+      const faceLostMatchesShoulder =
+        (step.target === 'left_shoulder' && lastYaw < -8) ||
+        (step.target === 'right_shoulder' && lastYaw > 8) ||
+        (step.target === 'look_back');
+
+      const isMatch = orientationMatches(detected, step.target) ||
+        (faceLost && faceLostMatchesShoulder);
+
+      if (isMatch) {
+        // Correct! Quick green flash and advance
+        state.wrongStart = null;
+        if (!state.correctStart) state.correctStart = now;
+        const progress = (now - state.correctStart) / HOLD_MS;
+        fill.style.width = '100%';
+        fill.className = 'timer-fill';
+        panel.className = 'instruction-panel green';
+        label.textContent = `✓ ${detected.replace(/_/g, ' ')}`;
+
+        if (progress >= 1) {
+          soundSuccess();
+          const elapsed = (now - state.stepStartTime) / 1000;
+          state.stepTimes.push(elapsed);
+          state.correctStart = null;
+          advanceStep();
+        }
+      } else if (detected === 'straight') {
+        // Neutral - just waiting
+        state.correctStart = null;
+        state.wrongStart = null;
+        fill.style.width = '0%';
+        fill.className = 'timer-fill';
+        panel.className = 'instruction-panel';
+        label.textContent = '';
+      } else {
+        // Wrong direction - gentle orange, only restart after long wrong
+        state.correctStart = null;
+        if (!state.wrongStart) state.wrongStart = now;
+        const wrongDur = now - state.wrongStart;
+        panel.className = 'instruction-panel orange';
+        label.textContent = `→ ${step.text}`;
+
+        if (wrongDur >= WRONG_MS) {
+          restartManeuver();
+        }
+      }
+    }
+
+    function advanceStep() {
+      const man = MANEUVERS[state.maneuverIndex];
+      state.stepIndex++;
+      if (state.stepIndex >= man.steps.length) {
+        // Maneuver complete!
+        showScreen('results');
+        renderResults();
+        return;
+      }
+      state.correctStart = null;
+      state.wrongStart = null;
+      renderPractice();
+      showPrep();
+    }
+
+    function restartManeuver() {
+      soundFail();
+      state.restarts++;
+      state.stepIndex = 0;
+      state.stepTimes = [];
+      state.correctStart = null;
+      state.wrongStart = null;
+      state.paused = true;
+
+      const overlay = document.getElementById('restart-overlay');
+      overlay.style.display = 'flex';
+      setTimeout(() => {
+        overlay.style.display = 'none';
+        renderPractice();
+        showPrep();
+      }, 1500);
+    }
+
+    // ===================== MODE HANDLERS =====================
+    function startSingle(index) {
+      state.mode = 'single';
+      state.maneuverIndex = index;
+      state.allQueue = [];
+      if (state.faceMeshReady) {
+        videoEl = document.getElementById('practice-video');
+        beginPractice();
+      } else {
+        initSystem().then(() => {});
+      }
+    }
+
+    function startRandom() {
+      const idx = Math.floor(Math.random() * MANEUVERS.length);
+      state.mode = 'random';
+      state.maneuverIndex = idx;
+      state.allQueue = [];
+      if (state.faceMeshReady) {
+        videoEl = document.getElementById('practice-video');
+        beginPractice();
+      } else {
+        initSystem().then(() => {});
+      }
+    }
+
+    function startAll() {
+      state.mode = 'all';
+      state.allQueue = MANEUVERS.map((_, i) => i).slice(1);
+      state.maneuverIndex = 0;
+      if (state.faceMeshReady) {
+        videoEl = document.getElementById('practice-video');
+        beginPractice();
+      } else {
+        initSystem().then(() => {});
+      }
+    }
+
+    function nextInQueue() {
+      if (state.allQueue.length > 0) {
+        state.maneuverIndex = state.allQueue.shift();
+        videoEl = document.getElementById('practice-video');
+        beginPractice();
+      } else {
+        goMenu();
+      }
+    }
+
+    function retryManeuver() {
+      videoEl = document.getElementById('practice-video');
+      beginPractice();
+    }
+
+    function goMenu() {
+      showScreen('menu');
+    }
+
+    function startWithKeyboardOnly() {
+      state.faceMeshReady = false;
+      state.cameraReady = false;
+      showScreen('menu');
+    }
+
+    // ===================== KEYBOARD SHORTCUTS =====================
+    document.addEventListener('keydown', (e) => {
+      if (state.screen !== 'practice' || state.paused) {
+        // D for debug toggle on any screen
+        if (e.key === 'd' || e.key === 'D') {
+          document.getElementById('debug-panel').classList.toggle('show');
+        }
+        return;
+      }
+
+      const man = MANEUVERS[state.maneuverIndex];
+      const step = man?.steps[state.stepIndex];
+      if (!step) return;
+
+      let simulated = null;
+      switch (e.key.toLowerCase()) {
+        case 'i': simulated = 'interior_mirror'; break;
+        case 'l': simulated = 'left_mirror'; break;
+        case 'r': simulated = 'right_mirror'; break;
+        case 'q': simulated = 'left_shoulder'; break;
+        case 'e': simulated = 'right_shoulder'; break;
+        case 'b': simulated = 'look_back'; break;
+        case ' ':
+          if (step.target === 'action') {
+            e.preventDefault();
+            advanceStep();
+            return;
+          }
+          break;
+        case 'd':
+          document.getElementById('debug-panel').classList.toggle('show');
+          return;
+      }
+
+      if (simulated && step.target !== 'action') {
+        // Simulate detection
+        state.latestDetected = simulated;
+        state.latestPose = { yaw: 0, pitch: 0 };
+        processDetection();
+      }
+    });
+
+    // ===================== INIT =====================
+    function init() {
+      renderMenu();
+
+      // Check file:// protocol
+      if (location.protocol === 'file:') {
+        const warning = document.createElement('div');
+        warning.style.cssText = 'background:var(--surface);border:1px solid var(--orange);border-radius:10px;padding:12px 16px;margin-bottom:16px;max-width:700px;width:100%;text-align:center;font-size:0.85rem;';
+        warning.innerHTML = `<span style="color:var(--orange)">⚠ Kameraet virker muligvis ikke fra file://</span><br>
+          <span style="color:var(--dim)">Kør: <code style="background:var(--surface2);padding:2px 6px;border-radius:3px">python3 -m http.server 8080</code> i orientation/-mappen<br>
+          Åbn derefter <a href="http://localhost:8080" style="color:var(--cyan)">localhost:8080</a> — eller brug tastatur-genveje</span>`;
+        document.getElementById('screen-menu').insertBefore(warning, document.querySelector('.mode-buttons'));
+      }
+    }
+
+    // Expose functions for onclick handlers (module scope doesn't expose globals)
+    window.startSingle = startSingle;
+    window.startRandom = startRandom;
+    window.startAll = startAll;
+    window.goMenu = goMenu;
+    window.retryManeuver = retryManeuver;
+    window.nextInQueue = nextInQueue;
+    window.startWithKeyboardOnly = startWithKeyboardOnly;
+
+    init();
+  </script>
+</body>
+</html>
