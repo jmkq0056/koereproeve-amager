@@ -70,6 +70,8 @@
     .timer-fill { height: 100%; border-radius: 3px; transition: width 0.1s; background: var(--green); }
     .timer-fill.orange { background: var(--orange); }
     .timer-fill.red { background: var(--red); }
+    .timer-fill.animate { background: linear-gradient(90deg, var(--blue), var(--cyan)); }
+    .instruction-panel.animate { border-color: var(--blue); box-shadow: 0 0 25px rgba(59,130,246,0.25); background: linear-gradient(135deg, var(--surface) 0%, rgba(6,182,212,0.08) 100%); }
     .progress-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
     .step-count { color: var(--dim); font-size: 0.85rem; }
     .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); }
@@ -238,6 +240,7 @@
           { text: 'Venstre skulder', en: 'Left shoulder check', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Før blink' },
           { text: 'BLINK VENSTRE', en: 'Signal left', target: 'action', icon: 'signal-left', phase: 'Blink' },
           { text: 'Venstre skulder', en: 'Left shoulder → TURN!', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Drej' },
+          { text: 'Drejer til venstre...', en: 'Turning left...', target: 'animate', icon: 'animate-turn', phase: 'Drej', animDuration: 2500 },
         ]
       },
       {
@@ -250,6 +253,7 @@
           { text: 'Indvendigt spejl', en: 'Interior mirror', target: 'interior_mirror', icon: 'rear', phase: 'Før drejning' },
           { text: 'Højre sidespejl', en: 'Right mirror', target: 'right_mirror', icon: 'side-right', phase: 'Før drejning' },
           { text: 'Højre skulder', en: 'Right shoulder (cyclists!)', target: 'right_shoulder', icon: 'shoulder-right', phase: 'Før drejning' },
+          { text: 'Drejer til højre...', en: 'Turning right...', target: 'animate', icon: 'animate-turn', phase: 'Drej', animDuration: 2500 },
           { text: 'Tjek cyklister → DREJ!', en: 'Check cyclists → TURN!', target: 'action', icon: 'turn', phase: 'Drej' },
         ]
       },
@@ -310,6 +314,7 @@
           // Reversing - just left shoulder checks to ensure nothing coming
           { text: 'Kig bagud', en: 'Look back', target: 'look_back', icon: 'back', phase: 'Bakning' },
           { text: 'Venstre skulder', en: 'Left shoulder (traffic?)', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Bakning' },
+          { text: 'Bakker ind...', en: 'Reversing in...', target: 'animate', icon: 'animate-reverse', phase: 'Bakning', animDuration: 2500 },
           { text: 'Kig bagud', en: 'Look back', target: 'look_back', icon: 'back', phase: 'Bakning' },
           { text: 'Venstre skulder', en: 'Left shoulder (clear?)', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Bakning' },
           { text: 'RET OP → STOP', en: 'STRAIGHTEN → STOP', target: 'action', icon: 'go', phase: 'Færdig' },
@@ -327,6 +332,7 @@
           // Reversing - look back + check left side
           { text: 'Kig bagud', en: 'Look back', target: 'look_back', icon: 'back', phase: 'Under bakning' },
           { text: 'Venstre skulder', en: 'Left shoulder (traffic?)', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Under bakning' },
+          { text: 'Bakker rundt...', en: 'Reversing around...', target: 'animate', icon: 'animate-reverse', phase: 'Under bakning', animDuration: 3000 },
           { text: 'Kig bagud', en: 'Look back', target: 'look_back', icon: 'back', phase: 'Under bakning' },
           { text: 'Venstre skulder', en: 'Left shoulder (clear?)', target: 'left_shoulder', icon: 'shoulder-left', phase: 'Under bakning' },
           { text: 'KØR FREMAD!', en: 'DRIVE FORWARD!', target: 'action', icon: 'go', phase: 'Kør ud' },
@@ -363,6 +369,7 @@
     const HOLD_MS = 200;      // quick glance confirms
     const WRONG_MS = 4000;    // very forgiving before restart
     const ACTION_MS = 800;    // quick text flash
+    const ANIMATE_MS = 2500;  // driving animation duration
     const STEP_COOLDOWN = 400; // ms pause between steps so they don't bleed into each other
 
     // ===================== AUDIO =====================
@@ -520,36 +527,70 @@
 
       switch (manId) {
         case 'left_turn': {
-          content = `
+          const ltBase = `
             ${svgRoadV(120, 80, H)}
             ${svgRoadH(160, 80, W)}
             <rect x="120" y="160" width="80" height="80" fill="#666"/>
             ${svgTree(50, 80)} ${svgTree(270, 80)} ${svgTree(50, 350)} ${svgTree(270, 350)}
-            ${svgCar(155, 290, 28, 50, '#4488ff')}
-            ${svgCar(127, 70, 28, 50, '#999')}
-            <path d="M 169,285 Q 169,200 90,200" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#aht)">
-              <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
-            </path>
-            <text x="70" y="145" fill="#f59e0b" font-size="11" font-weight="700" opacity="0.8">← DREJ</text>
-            ${mirrorDots(169, 315, 28, 50, active)}
-          `;
+            ${svgCar(127, 70, 28, 50, '#999')}`;
+          if (active === 'animate') {
+            content = `${ltBase}
+              ${svgCar(155, 290, 28, 50, '#4488ff33')}
+              <path d="M 169,285 Q 169,200 90,200" fill="none" stroke="#3b82f6" stroke-width="3" stroke-dasharray="6,4">
+                <animate attributeName="stroke-dashoffset" from="10" to="0" dur="0.6s" repeatCount="indefinite"/>
+              </path>
+              <g transform="translate(169,290)">
+                <animateMotion dur="2.5s" fill="freeze" rotate="auto" path="M 0,0 Q 0,-90 -79,-90"/>
+                <rect x="-14" y="-25" width="28" height="50" rx="5" fill="#3b82f6"/>
+                <rect x="-11" y="-22" width="22" height="15" rx="3" fill="#88bbff" opacity="0.6"/>
+              </g>
+              <text x="70" y="145" fill="#3b82f6" font-size="13" font-weight="700">
+                ← DREJER...
+                <animate attributeName="opacity" values="1;0.4;1" dur="1.5s" repeatCount="indefinite"/>
+              </text>`;
+          } else {
+            content = `${ltBase}
+              ${svgCar(155, 290, 28, 50, '#4488ff')}
+              <path d="M 169,285 Q 169,200 90,200" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#aht)">
+                <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
+              </path>
+              <text x="70" y="145" fill="#f59e0b" font-size="11" font-weight="700" opacity="0.8">← DREJ</text>
+              ${mirrorDots(169, 315, 28, 50, active)}`;
+          }
           break;
         }
         case 'right_turn': {
-          content = `
+          const rtBase = `
             ${svgRoadV(120, 80, H)}
             ${svgRoadH(160, 80, W)}
             <rect x="120" y="160" width="80" height="80" fill="#666"/>
             <rect x="200" y="155" width="12" height="90" fill="#558855" opacity="0.6"/>
             <text x="203" y="205" fill="#aaffaa" font-size="8" transform="rotate(90,206,200)">CYKEL</text>
-            ${svgTree(50, 80)} ${svgTree(270, 80)} ${svgTree(50, 350)}
-            ${svgCar(132, 290, 28, 50, '#4488ff')}
-            <path d="M 146,285 Q 146,200 230,200" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#aht)">
-              <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
-            </path>
-            <text x="225" y="145" fill="#f59e0b" font-size="11" font-weight="700" opacity="0.8">DREJ →</text>
-            ${mirrorDots(146, 315, 28, 50, active)}
-          `;
+            ${svgTree(50, 80)} ${svgTree(270, 80)} ${svgTree(50, 350)}`;
+          if (active === 'animate') {
+            content = `${rtBase}
+              ${svgCar(132, 290, 28, 50, '#4488ff33')}
+              <path d="M 146,285 Q 146,200 230,200" fill="none" stroke="#3b82f6" stroke-width="3" stroke-dasharray="6,4">
+                <animate attributeName="stroke-dashoffset" from="10" to="0" dur="0.6s" repeatCount="indefinite"/>
+              </path>
+              <g transform="translate(146,290)">
+                <animateMotion dur="2.5s" fill="freeze" rotate="auto" path="M 0,0 Q 0,-90 84,-90"/>
+                <rect x="-14" y="-25" width="28" height="50" rx="5" fill="#3b82f6"/>
+                <rect x="-11" y="-22" width="22" height="15" rx="3" fill="#88bbff" opacity="0.6"/>
+              </g>
+              <text x="215" y="145" fill="#3b82f6" font-size="13" font-weight="700">
+                DREJER →
+                <animate attributeName="opacity" values="1;0.4;1" dur="1.5s" repeatCount="indefinite"/>
+              </text>`;
+          } else {
+            content = `${rtBase}
+              ${svgCar(132, 290, 28, 50, '#4488ff')}
+              <path d="M 146,285 Q 146,200 230,200" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#aht)">
+                <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
+              </path>
+              <text x="225" y="145" fill="#f59e0b" font-size="11" font-weight="700" opacity="0.8">DREJ →</text>
+              ${mirrorDots(146, 315, 28, 50, active)}`;
+          }
           break;
         }
         case 'move_off_right': {
@@ -607,37 +648,71 @@
           break;
         }
         case 'parallel_park': {
-          content = `
+          const ppBase = `
             ${svgRoadV(60, 140, H)}
             <rect x="190" y="0" width="12" height="${H}" fill="#888" rx="1"/>
             ${svgCar(192, 70, 26, 48, '#999')}
             ${svgCar(192, 260, 26, 48, '#999')}
             <rect x="192" y="128" width="26" height="120" rx="3" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="4,3"/>
             <text x="196" y="192" fill="#22c55e" font-size="9" opacity="0.8">PLADS</text>
-            ${svgCar(192, 20, 26, 48, '#4488ff')}
-            <path d="M 205,70 Q 210,130 205,160 Q 200,190 205,200" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#aht)">
-              <animate attributeName="stroke-dashoffset" from="8" to="0" dur="1.2s" repeatCount="indefinite"/>
-            </path>
-            ${svgTree(30, 80)} ${svgTree(30, 250)} ${svgTree(260, 150)}
-            ${mirrorDots(205, 44, 26, 48, active)}
-          `;
+            ${svgTree(30, 80)} ${svgTree(30, 250)} ${svgTree(260, 150)}`;
+          if (active === 'animate') {
+            content = `${ppBase}
+              ${svgCar(192, 20, 26, 48, '#4488ff33')}
+              <path d="M 205,70 Q 210,130 205,160 Q 200,190 205,200" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="5,3">
+                <animate attributeName="stroke-dashoffset" from="8" to="0" dur="0.6s" repeatCount="indefinite"/>
+              </path>
+              <g transform="translate(205,44)">
+                <animateMotion dur="2.5s" fill="freeze" path="M 0,0 Q 5,86 0,116 Q -5,146 0,156"/>
+                <rect x="-13" y="-24" width="26" height="48" rx="5" fill="#3b82f6"/>
+                <rect x="-10" y="-21" width="20" height="14" rx="3" fill="#88bbff" opacity="0.6"/>
+              </g>
+              <text x="220" y="150" fill="#3b82f6" font-size="11" font-weight="700">
+                BAKKER...
+                <animate attributeName="opacity" values="1;0.4;1" dur="1.5s" repeatCount="indefinite"/>
+              </text>`;
+          } else {
+            content = `${ppBase}
+              ${svgCar(192, 20, 26, 48, '#4488ff')}
+              <path d="M 205,70 Q 210,130 205,160 Q 200,190 205,200" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#aht)">
+                <animate attributeName="stroke-dashoffset" from="8" to="0" dur="1.2s" repeatCount="indefinite"/>
+              </path>
+              ${mirrorDots(205, 44, 26, 48, active)}`;
+          }
           break;
         }
         case 'reverse_corner': {
-          content = `
+          const rcBase = `
             ${svgRoadV(120, 80, 250)}
             ${svgRoadH(240, 80, 200, 120)}
             <rect x="120" y="240" width="80" height="80" fill="#666"/>
             ${svgTree(50, 80)} ${svgTree(270, 150)} ${svgTree(50, 350)}
             <rect x="40" y="245" width="70" height="70" rx="4" fill="#5a4a3a" opacity="0.4"/>
-            <text x="55" y="285" fill="#94a3b8" font-size="8">Hjørne</text>
-            ${svgCar(142, 100, 26, 48, '#4488ff')}
-            <path d="M 155,150 Q 155,250 155,280 Q 155,310 220,310" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#aht)">
-              <animate attributeName="stroke-dashoffset" from="8" to="0" dur="1.2s" repeatCount="indefinite"/>
-            </path>
-            <text x="230" y="305" fill="#f59e0b" font-size="10" font-weight="700" opacity="0.7">BAK →</text>
-            ${mirrorDots(155, 124, 26, 48, active)}
-          `;
+            <text x="55" y="285" fill="#94a3b8" font-size="8">Hjørne</text>`;
+          if (active === 'animate') {
+            content = `${rcBase}
+              ${svgCar(142, 100, 26, 48, '#4488ff33')}
+              <path d="M 155,150 Q 155,250 155,280 Q 155,310 220,310" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="5,3">
+                <animate attributeName="stroke-dashoffset" from="8" to="0" dur="0.6s" repeatCount="indefinite"/>
+              </path>
+              <g transform="translate(155,124)">
+                <animateMotion dur="3s" fill="freeze" rotate="auto" path="M 0,0 Q 0,126 0,156 Q 0,186 65,186"/>
+                <rect x="-13" y="-24" width="26" height="48" rx="5" fill="#3b82f6"/>
+                <rect x="-10" y="-21" width="20" height="14" rx="3" fill="#88bbff" opacity="0.6"/>
+              </g>
+              <text x="220" y="345" fill="#3b82f6" font-size="11" font-weight="700">
+                BAKKER...
+                <animate attributeName="opacity" values="1;0.4;1" dur="1.5s" repeatCount="indefinite"/>
+              </text>`;
+          } else {
+            content = `${rcBase}
+              ${svgCar(142, 100, 26, 48, '#4488ff')}
+              <path d="M 155,150 Q 155,250 155,280 Q 155,310 220,310" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#aht)">
+                <animate attributeName="stroke-dashoffset" from="8" to="0" dur="1.2s" repeatCount="indefinite"/>
+              </path>
+              <text x="230" y="305" fill="#f59e0b" font-size="10" font-weight="700" opacity="0.7">BAK →</text>
+              ${mirrorDots(155, 124, 26, 48, active)}`;
+          }
           break;
         }
       }
@@ -658,6 +733,8 @@
         case 'signal-right': return `<div class="shoulder-icon" style="color:#f59e0b">➡</div>`;
         case 'turn': return `<div class="shoulder-icon" style="color:#22c55e">🚗</div>`;
         case 'go': return `<div class="shoulder-icon" style="color:#22c55e">▶</div>`;
+        case 'animate-turn': return `<div class="shoulder-icon" style="color:var(--blue)">🚗</div>`;
+        case 'animate-reverse': return `<div class="shoulder-icon" style="color:var(--blue)">🚗</div>`;
         default: return `<div class="shoulder-icon">👁</div>`;
       }
     }
@@ -697,7 +774,9 @@
       // Progress dots
       const dots = man.steps.map((s, i) => {
         if (i < state.stepIndex) return '<div class="dot done"></div>';
+        if (i === state.stepIndex && s.target === 'animate') return '<div class="dot current" style="background:var(--blue);border-color:var(--blue)"></div>';
         if (i === state.stepIndex) return '<div class="dot current"></div>';
+        if (s.target === 'animate') return '<div class="dot" style="background:var(--blue);border-color:var(--blue);opacity:0.3"></div>';
         return '<div class="dot"></div>';
       }).join('');
       document.getElementById('progress-row').innerHTML = `<span class="step-count">Trin ${state.stepIndex + 1}/${man.steps.length}</span>${dots}`;
@@ -709,7 +788,7 @@
       const man = MANEUVERS[state.maneuverIndex];
       const totalTime = state.stepTimes.reduce((a, b) => a + b, 0);
       const avgTime = state.stepTimes.length ? totalTime / state.stepTimes.length : 0;
-      const detectionSteps = man.steps.filter(s => s.target !== 'action');
+      const detectionSteps = man.steps.filter(s => s.target !== 'action' && s.target !== 'animate');
       const score = Math.max(0, Math.min(100, Math.round(100 - (avgTime - 1) * 20 - state.restarts * 15)));
       const stars = score >= 90 ? 5 : score >= 75 ? 4 : score >= 60 ? 3 : score >= 40 ? 2 : 1;
       const scoreClass = score >= 70 ? 'green' : score >= 40 ? 'orange' : 'red';
@@ -717,7 +796,7 @@
       let stepRows = '';
       let timeIdx = 0;
       man.steps.forEach((s, i) => {
-        if (s.target !== 'action') {
+        if (s.target !== 'action' && s.target !== 'animate') {
           const t = state.stepTimes[timeIdx] || 0;
           const tClass = t < 1.5 ? 'style="color:#22c55e"' : t < 3 ? 'style="color:#f59e0b"' : 'style="color:#ef4444"';
           stepRows += `<div class="step-result-row"><span>${s.text}</span><span class="time" ${tClass}>${t.toFixed(1)}s</span></div>`;
@@ -983,6 +1062,8 @@
         const step = man.steps[state.stepIndex];
         if (step.target === 'action') {
           runActionStep();
+        } else if (step.target === 'animate') {
+          runAnimateStep(step);
         }
       }, STEP_COOLDOWN);
     }
@@ -1001,11 +1082,28 @@
       }, 50);
     }
 
+    function runAnimateStep(step) {
+      const duration = step.animDuration || ANIMATE_MS;
+      const fill = document.getElementById('timer-fill');
+      const panel = document.getElementById('instr-panel');
+      fill.className = 'timer-fill animate';
+      panel.className = 'instruction-panel animate';
+      let elapsed = 0;
+      const iv = setInterval(() => {
+        elapsed += 50;
+        fill.style.width = (elapsed / duration * 100) + '%';
+        if (elapsed >= duration) {
+          clearInterval(iv);
+          advanceStep();
+        }
+      }, 50);
+    }
+
     function processDetection() {
       const man = MANEUVERS[state.maneuverIndex];
       if (!man) return;
       const step = man.steps[state.stepIndex];
-      if (!step || step.target === 'action') return;
+      if (!step || step.target === 'action' || step.target === 'animate') return;
 
       const detected = state.latestDetected;
       const now = Date.now();
@@ -1182,7 +1280,7 @@
         case 'e': simulated = 'right_shoulder'; break;
         case 'b': simulated = 'look_back'; break;
         case ' ':
-          if (step.target === 'action') {
+          if (step.target === 'action' || step.target === 'animate') {
             e.preventDefault();
             advanceStep();
             return;
@@ -1193,7 +1291,7 @@
           return;
       }
 
-      if (simulated && step.target !== 'action') {
+      if (simulated && step.target !== 'action' && step.target !== 'animate') {
         // Simulate detection
         state.latestDetected = simulated;
         state.latestPose = { yaw: 0, pitch: 0 };
