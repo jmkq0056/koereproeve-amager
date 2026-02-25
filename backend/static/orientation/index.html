@@ -421,8 +421,8 @@
 
     function classifyOrientation(yaw, pitch) {
       const ay = Math.abs(yaw);
-      // Interior mirror FIRST: looking up takes priority
-      if (pitch < -3 && ay < 22) return 'interior_mirror';
+      // Interior mirror FIRST: looking up takes priority (needs significant upward tilt)
+      if (pitch < -8 && ay < 22) return 'interior_mirror';
       // Look back (extreme turn)
       if (ay > 40) return 'look_back';
       // Shoulder checks: >16° (cooldown prevents bleed from mirror)
