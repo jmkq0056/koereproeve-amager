@@ -509,7 +509,7 @@ async def seed_villa_streets():
     print(f"  Stored {len(streets)} unique villa streets")
 
 
-async def main(only_here: bool = False, only_hojre: bool = False):
+async def main(only_here: bool = False, only_hojre: bool = False, only_speed: bool = False):
     print("=" * 50)
     print("SEEDING KØREPRØVE AMAGER DATABASE")
     print(f"Center: {START_LAT}, {START_LNG}")
@@ -519,9 +519,14 @@ async def main(only_here: bool = False, only_hojre: bool = False):
         print("MODE: HERE speed limits ONLY")
     elif only_hojre:
         print("MODE: Højre vigepligt ONLY")
+    elif only_speed:
+        print("MODE: ALL speed data ONLY (OSM + HERE)")
     print("=" * 50)
 
-    if only_here:
+    if only_speed:
+        # Reseed both speed collections without touching other data
+        await asyncio.gather(seed_speed_limits(), seed_here_speed_limits())
+    elif only_here:
         await seed_here_speed_limits()
     elif only_hojre:
         signed_ids = await seed_signed_intersections()
@@ -550,4 +555,5 @@ if __name__ == "__main__":
     import sys
     only_here = "--here" in sys.argv
     only_hojre = "--hojre" in sys.argv
-    asyncio.run(main(only_here=only_here, only_hojre=only_hojre))
+    only_speed = "--speed" in sys.argv
+    asyncio.run(main(only_here=only_here, only_hojre=only_hojre, only_speed=only_speed))

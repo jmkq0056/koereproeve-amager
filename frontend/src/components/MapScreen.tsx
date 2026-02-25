@@ -502,18 +502,26 @@ export default function MapScreen({ route, intersections, roads, villaStreets, g
     if (!filters.speed_limits || signsHidden) return;
 
     const rPts = routePointsRef.current;
+    if (rPts.length === 0) return; // Guard: route not decoded yet
 
     if (googleSpeeds.length > 0) {
-      // Use merged HERE + OSM speed limit points near route
-      const shown = new Set<string>();
+      // First pass: collect best speed per grid cell, preferring zone speeds (<=40)
+      const cellMap = new Map<string, GoogleSpeedLimit>();
       googleSpeeds.forEach((gs) => {
         if (!gs.lat || !gs.lng || !gs.speedLimit) return;
         if (!nearRoute(gs.lat, gs.lng, rPts, 200)) return;
-        // Deduplicate by grid cell (~100m)
         const gridKey = `${Math.round(gs.lat * 1000)}_${Math.round(gs.lng * 1000)}`;
-        if (shown.has(gridKey)) return;
-        shown.add(gridKey);
+        const existing = cellMap.get(gridKey);
+        if (!existing) {
+          cellMap.set(gridKey, gs);
+        } else if (gs.speedLimit <= 40 && existing.speedLimit > 40) {
+          // Zone speed (30/40) takes priority over regular speed
+          cellMap.set(gridKey, gs);
+        }
+      });
 
+      // Second pass: create markers
+      cellMap.forEach((gs) => {
         const sign = createSpeedSign(gs.speedLimit);
         const wrapped = wrapScalable(sign, zoomRef.current);
         const marker = new google.maps.marker.AdvancedMarkerElement({
